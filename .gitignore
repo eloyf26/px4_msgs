@@ -1,56 +1,151 @@
-# ROS2 build artifacts
-ws_ros2/build/
-ws_ros2/install/
-ws_ros2/log/
+# ROS2 build artifacts (anywhere in tree)
+**/build/
+**/install/
+**/log/
+build/
+install/
+log/
 
-# Python
+# Python bytecode and cache
+**/__pycache__/
 __pycache__/
 *.py[cod]
 *$py.class
 *.so
 .Python
 .venv
+venv/
+env/
+ENV/
 *.egg-info/
+*.egg
 dist/
-build/
+.eggs/
 
-# ROS bags
+# Compiled binaries
+*.a
+*.lib
+*.dll
+*.dylib
+*.exe
+
+# ROS bags and logs
 *.bag
 *.db3
 *.db3-*
+*.mcap
+*.ulg
 
-# IDE/Editor
+# IDE/Editor files
 .vscode/
 .idea/
 *.swp
 *.swo
 *~
 .*.swp
+*.tmp
+.#*
+\#*#
+.emacs.desktop
+.emacs.desktop.lock
+*.sublime-*
+.project
+.cproject
 
-# OS
+# OS generated files
 .DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
 Thumbs.db
 *.bak
+*~
+.directory
 
-# Logs
+# Logs and temporary files
 *.log
 logs/
-
-# Temporary files
 *.tmp
 tmp/
+*.temp
+.cache/
 
-# Documentation build
+# Documentation build artifacts
 docs/_build/
 docs/.jekyll-cache/
+_site/
+.sass-cache/
 
-# Coverage reports
+# Testing and coverage
 htmlcov/
 .coverage
 coverage.xml
 *.cover
 .pytest_cache/
+.tox/
+.nox/
+junit.xml
+test-results/
 
-# External tool builds (handled by submodules)
-external/PX4-Autopilot/build/
-external/Micro-XRCE-DDS-Agent/build/
+# CMake
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+Makefile
+*.cmake
+!CMakeLists.txt
+
+# Make build artifacts
+*.o
+*.lo
+*.la
+*.al
+.libs
+.deps/
+.dirstamp
+
+# Autotools
+autom4te.cache/
+aclocal.m4
+compile
+config.guess
+config.sub
+configure
+depcomp
+install-sh
+ltmain.sh
+missing
+mkinstalldirs
+
+# GDB
+.gdb_history
+core.*
+
+# Vim temporary files
+.*.un~
+
+# External submodule build artifacts
+external/*/build/
+external/*/install/
+external/*/log/
+
+# Gazebo artifacts
+*.world~
+models/
+
+# Specific large files that shouldn't be tracked
+*.tar.gz
+*.zip
+*.rar
+*.7z
+
+# Runtime configuration
+.env
+.env.local
+.env.*.local
+
+# Backup files
+*.orig
+*.rej
