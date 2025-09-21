@@ -1,0 +1,56 @@
+# ROS2 build artifacts
+ws_ros2/build/
+ws_ros2/install/
+ws_ros2/log/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.venv
+*.egg-info/
+dist/
+build/
+
+# ROS bags
+*.bag
+*.db3
+*.db3-*
+
+# IDE/Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.*.swp
+
+# OS
+.DS_Store
+Thumbs.db
+*.bak
+
+# Logs
+*.log
+logs/
+
+# Temporary files
+*.tmp
+tmp/
+
+# Documentation build
+docs/_build/
+docs/.jekyll-cache/
+
+# Coverage reports
+htmlcov/
+.coverage
+coverage.xml
+*.cover
+.pytest_cache/
+
+# External tool builds (handled by submodules)
+external/PX4-Autopilot/build/
+external/Micro-XRCE-DDS-Agent/build/

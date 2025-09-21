@@ -1,0 +1,19 @@
+<?xml version="1.0"?>
+<package format="3">
+  <name>halcon1_interception</name>
+  <version>0.0.0</version>
+  <description>Interception module</description>
+  <maintainer email="dev@halcon.com">Halcon Team</maintainer>
+  <license>Apache-2.0</license>
+
+  <depend>rclpy</depend>
+  <depend>halcon1_msgs</depend>
+
+  <test_depend>ament_copyright</test_depend>
+  <test_depend>ament_flake8</test_depend>
+  <test_depend>ament_pep257</test_depend>
+
+  <export>
+    <build_type>ament_python</build_type>
+  </export>
+</package>
