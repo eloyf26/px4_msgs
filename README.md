@@ -83,14 +83,23 @@ This will:
 
 ## Running the System
 
+### Setup Requirements
+
+**QGroundControl (Required)**
+- Download from: https://qgroundcontrol.com/
+- Launch QGC before or after starting PX4
+- Acts as Ground Control Station (prevents "No connection to GCS" errors)
+
 ### Three-Terminal Setup
 
 **Terminal 1: PX4 SITL**
 ```bash
 ./scripts/launch_px4.sh
+# Or for offboard control:
+./scripts/launch_px4_offboard.sh
 ```
 - Launches Gazebo with X500 quadcopter
-- Provides flight controller simulation
+- ⚠️ **Requires QGroundControl to be running**
 
 **Terminal 2: MicroXRCE Agent**
 ```bash
@@ -102,9 +111,10 @@ This will:
 **Terminal 3: Halcon1 Pipeline**
 ```bash
 ./scripts/launch_halcon1.sh
+# Or for offboard control demo:
+./scripts/launch_offboard.sh
 ```
-- Starts all four processing nodes
-- Processes simulated enemy drone detections
+- Starts processing nodes or offboard control
 
 ### Monitor System (Terminal 4)
 
