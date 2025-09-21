@@ -89,6 +89,14 @@ class InterceptionNode(Node):
 
     def trajectory_callback(self, msg):
         """Process predicted enemy trajectory and plan interception"""
+        # Only plan interception if we're actually flying
+        if not self.offboard_mode_active or not self.is_armed:
+            return
+
+        # Only plan if we're at altitude
+        if self.friendly_position[2] > self.takeoff_height + 1.0:
+            return  # Still taking off
+
         # Convert message to dict format
         enemy_trajectory = {
             'times': np.array(msg.times),
@@ -109,7 +117,7 @@ class InterceptionNode(Node):
             # Use ROS2 simulation time
             self.trajectory_start_time = self.get_clock().now()
             self.interception_enabled = True
-            self.get_logger().info('New interception trajectory planned')
+            self.get_logger().info('🚁 Interception trajectory planned! Starting intercept maneuver...')
 
     def arm(self):
         """Send arm command to vehicle"""
@@ -188,7 +196,7 @@ class InterceptionNode(Node):
             self.setpoint_pub.publish(msg)
 
             # Log progress
-            if self.offboard_setpoint_counter % 10 == 0:
+            if self.offboard_setpoint_counter < 10:
                 self.get_logger().info(f'Sending pre-arm setpoints... ({self.offboard_setpoint_counter})')
 
             # Engage offboard mode and arm after sending some setpoints

@@ -47,9 +47,9 @@ class DetectionNode(Node):
         )
 
         msg = DroneDetection()
-        msg.x = x
-        msg.y = y
-        msg.confidence = confidence
+        msg.x = float(x)  # Convert numpy float to Python float
+        msg.y = float(y)
+        msg.confidence = float(confidence)
         self.pub.publish(msg)
 
 def main():
