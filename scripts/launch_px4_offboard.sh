@@ -28,6 +28,8 @@ echo ""
 # Set minimal parameters for offboard control
 export PX4_PARAM_COM_RCL_EXCEPT=4    # Allow offboard without RC
 export PX4_PARAM_COM_ARM_WO_GPS=1    # Allow arming without GPS
+export PX4_PARAM_COM_OBL_RC_ACT=0    # Disable RC loss action in offboard
+export PX4_PARAM_NAV_DLL_ACT=0       # Disable data link loss action
 
 # Set simulation speed (1 = realtime)
 # Can be overridden by environment variable or command line argument
