@@ -9,7 +9,7 @@ def generate_launch_description():
             name='detection_node',
             output='screen',
             parameters=[{
-                'use_sim_time': True
+                'use_sim_time': False  # Set to False for now, True only with Gazebo running
             }]
         ),
         Node(
@@ -18,7 +18,7 @@ def generate_launch_description():
             name='tracking_node',
             output='screen',
             parameters=[{
-                'use_sim_time': True
+                'use_sim_time': False  # Set to False for now, True only with Gazebo running
             }]
         ),
         Node(
@@ -27,7 +27,7 @@ def generate_launch_description():
             name='prediction_node',
             output='screen',
             parameters=[{
-                'use_sim_time': True
+                'use_sim_time': False  # Set to False for now, True only with Gazebo running
             }]
         ),
         Node(
@@ -36,7 +36,7 @@ def generate_launch_description():
             name='interception_node',
             output='screen',
             parameters=[{
-                'use_sim_time': True
+                'use_sim_time': False  # Set to False for now, True only with Gazebo running
             }]
         ),
     ])

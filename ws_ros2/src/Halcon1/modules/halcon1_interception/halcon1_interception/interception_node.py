@@ -11,6 +11,7 @@ from halcon1_interception.px4_command_generator import PX4CommandGenerator
 class InterceptionNode(Node):
     def __init__(self):
         super().__init__('interception_node')
+        self.get_logger().info('Initializing interception node...')
 
         # Configure QoS profile for PX4 communication
         qos_profile = QoSProfile(
@@ -19,6 +20,7 @@ class InterceptionNode(Node):
             history=HistoryPolicy.KEEP_LAST,
             depth=1
         )
+        self.get_logger().info('QoS profile configured')
 
         # Publishers
         self.setpoint_pub = self.create_publisher(
@@ -47,7 +49,9 @@ class InterceptionNode(Node):
         self.command_generator = PX4CommandGenerator()
 
         # 50Hz timer for PX4 commands
+        self.get_logger().info('Creating 50Hz timer for PX4 commands...')
         self.command_timer = self.create_timer(0.02, self.publish_setpoint)
+        self.get_logger().info('Timer created successfully')
 
         # State
         self.friendly_position = np.array([0.0, 0.0, 0.0])
@@ -162,6 +166,10 @@ class InterceptionNode(Node):
 
     def publish_setpoint(self):
         """Publish trajectory setpoint at 50Hz for PX4 offboard control"""
+        # Debug: Log first call
+        if self.offboard_setpoint_counter == 0:
+            self.get_logger().info('First timer callback - starting offboard control')
+
         # Always publish offboard control mode heartbeat
         self.publish_offboard_control_mode()
 
@@ -245,6 +253,12 @@ class InterceptionNode(Node):
             msg.yaw = 0.0
             msg.yawspeed = float('nan')
             self.setpoint_pub.publish(msg)
+
+            # Log status periodically
+            if self.offboard_setpoint_counter % 100 == 0:  # Every 2 seconds
+                distance_to_enemy = np.linalg.norm(self.friendly_position - self.enemy_position)
+                self.get_logger().info(f'Hovering at {-self.friendly_position[2]:.1f}m altitude. Enemy distance: {distance_to_enemy:.1f}m. Waiting for interception trajectory...')
+            self.offboard_setpoint_counter += 1
             return
 
         # Get current time in trajectory using ROS2 time
