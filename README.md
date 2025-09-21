@@ -20,7 +20,7 @@ cd halcon1-system
 ./setup.sh
 
 # Launch system (3 terminals)
-./scripts/launch_px4.sh      # Terminal 1: PX4 SITL
+./scripts/launch_px4_offboard.sh      # Terminal 1: PX4 SITL
 ./scripts/launch_agent.sh    # Terminal 2: MicroXRCE Agent
 ./scripts/launch_halcon1.sh  # Terminal 3: Halcon1 Pipeline
 ```
