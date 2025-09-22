@@ -14,10 +14,16 @@ echo "=== Halcon1 System Setup ==="
 echo "→ Initializing git submodules..."
 git submodule update --init --recursive
 
-# 2. Install PX4 Toolchain (without simulator to avoid conflicts)
-echo "→ Installing PX4 Toolchain without simulator..."
+# 5. Clean all Gazebo installations (including Fortress)
+echo "→ Removing all Gazebo installations (including Fortress)..."
+sudo apt list --installed | grep -E 'gazebo|gz-|ignition-' | awk -F/ '{print $1}' | xargs -r sudo apt remove -y
+sudo apt autoremove -y || true
+echo "✓ All Gazebo installations removed"
+
+# 2. Install PX4 Toolchain (includes gazebo harmonic)
+echo "→ Installing PX4 Toolchain with gazebo harmonic simulator..."
 cd external/PX4-Autopilot
-bash ./Tools/setup/ubuntu.sh --no-sim-tools
+bash ./Tools/setup/ubuntu.sh
 cd "$SCRIPT_DIR"
 
 # 3. Build PX4 (optional, takes time)
@@ -39,33 +45,28 @@ cmake ..
 make -j$(nproc)
 cd "$SCRIPT_DIR"
 
-# 5. Clean and install Gazebo Fortress (compatible with ROS2 Humble)
-echo "→ Cleaning any existing Gazebo installations except Gazebo Fortress..."
-sudo apt list --installed | grep -E 'gazebo|gz-|ignition-' | grep -v 'gz-fortress' | awk -F/ '{print $1}' | xargs -r sudo apt remove -y
-sudo apt autoremove -y || true
-echo "✓ Existing Gazebo installations (except Fortress) cleaned"
-
-echo "→ Installing Gazebo Fortress..."
-sudo apt update
-sudo apt install -y lsb-release wget gnupg
-sudo wget https://packages.osrfoundation.org/gazebo.gpg -O /usr/share/keyrings/pkgs-osrf-archive-keyring.gpg
-echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/pkgs-osrf-archive-keyring.gpg] http://packages.osrfoundation.org/gazebo/ubuntu-stable $(lsb_release -cs) main" | sudo tee /etc/apt/sources.list.d/gazebo-stable.list > /dev/null
-sudo apt update
-sudo apt install -y gz-fortress
-echo "✓ Gazebo Fortress installed"
-
 # 6. Install ROS2 Gazebo Bridge package
-echo "→ Setting up ROS2 repository for ros-gz packages..."
-# Ensure ROS2 repository is configured
-curl -s https://raw.githubusercontent.com/ros/rosdistro/master/ros.asc | sudo apt-key add -
+echo "→ Installing ROS2 Bridge for Gazebo Harmonic package from source (humble branch)..."
 sudo sh -c 'echo "deb [arch=$(dpkg --print-architecture)] http://packages.ros.org/ros2/ubuntu $(lsb_release -cs) main" > /etc/apt/sources.list.d/ros2-latest.list'
-sudo apt update
-
-echo "→ Installing ROS2 Gazebo Bridge package..."
-sudo apt install -y ros-humble-ros-gz
-echo "✓ ROS2 Gazebo bridge package installed"
+curl -s https://raw.githubusercontent.com/ros/rosdistro/master/ros.asc | sudo apt-key add -
+sudo apt-get update
+sudo apt install ros-humble-ros-gz
 
 # 7. Build ROS2 workspace
+echo "→ Installing ROS2 build tools..."
+sudo apt install -y \
+    python3-colcon-common-extensions \
+    ros-humble-rosidl-default-generators \
+    ros-humble-ament-cmake \
+    ros-humble-ament-cmake-cppcheck \
+    ros-humble-ament-cmake-cpplint \
+    ros-humble-ament-cmake-flake8 \
+    ros-humble-ament-cmake-pep257 \
+    ros-humble-ament-cmake-uncrustify \
+    ros-humble-ament-lint-auto \
+    ros-humble-ament-lint-common
+echo "✓ ROS2 build tools installed"
+
 echo "→ Building ROS2 packages..."
 cd ws_ros2
 source /opt/ros/humble/setup.bash
