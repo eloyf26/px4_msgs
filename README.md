@@ -13,7 +13,7 @@ This repository contains all components needed to run the complete system, inclu
 
 ```bash
 # Clone repository with submodules
-git clone --recursive https://github.com/yourusername/halcon1-system.git
+git clone --recursive https://github.com/eloyf26/halcon1-system.git
 cd halcon1-system
 
 # Run setup (builds everything)

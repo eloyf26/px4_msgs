@@ -29,11 +29,23 @@ echo
 if [[ $REPLY =~ ^[Yy]$ ]]; then
     echo "→ Building PX4 SITL..."
     cd external/PX4-Autopilot
-    make px4_sitl gz_x500
+    make px4_sitl_default
     cd "$SCRIPT_DIR"
 fi
 
-# 4. Build ROS2 workspace
+# 4. Install PX4 Toolchain (with Gazebo Harmonic simulator)
+echo "→ Installing PX4 Toolchain with Gazebo Harmonic..."
+cd external/PX4-Autopilot
+bash ./Tools/setup/ubuntu.sh
+cd "$SCRIPT_DIR"
+
+# 5. Install ROS2 Gazebo Harmonic Bridge packages
+echo "→ Installing ROS2 Gazebo Harmonic Bridge packages..."
+sudo apt update
+sudo apt install -y ros-humble-ros-gzharmonic ros-humble-ros-gz-image ros-humble-ros-gz-bridge
+echo "✓ ROS2 Gazebo Harmonic bridge packages installed"
+
+# 6. Build ROS2 workspace
 echo "→ Building ROS2 packages..."
 cd ws_ros2
 source /opt/ros/humble/setup.bash
@@ -44,12 +56,24 @@ colcon build --packages-select px4_msgs px4_ros_com
 colcon build --packages-select halcon1_detection halcon1_tracking halcon1_prediction halcon1_interception
 colcon build --packages-select halcon1_bringup px4_offboard
 
+cd "$SCRIPT_DIR"
+
+# 7. Make all scripts executable
+echo "→ Making scripts executable..."
+chmod +x scripts/*.sh
+echo "✓ All scripts are now executable"
+
 echo "=== Setup Complete ==="
 echo ""
-echo "To use the system:"
-echo "  1. Terminal 1: ./scripts/launch_px4.sh"
-echo "  2. Terminal 2: ./scripts/launch_agent.sh"
-echo "  3. Terminal 3: ./scripts/launch_halcon1.sh"
+echo "To use the system with camera:"
+echo "  1. Terminal 1: ./scripts/launch_px4.sh          # PX4 SITL with x500_mono_cam"
+echo "  2. Terminal 2: ./scripts/launch_agent.sh        # MicroXRCE Agent (bridge PX4 → ROS2)"
+echo "  3. Terminal 3: ./scripts/launch_camera_bridge.sh # Camera bridge (Gazebo → ROS2)"
+echo "  4. Terminal 4: ./scripts/launch_halcon1.sh       # Halcon1 Pipeline"
+echo ""
+echo "Camera feed will be available on ROS2 topics:"
+echo "  /camera       - Camera images (sensor_msgs/Image)"
+echo "  /camera_info  - Camera calibration info"
 echo ""
 echo "Source ROS2 workspace:"
 echo "  source $SCRIPT_DIR/ws_ros2/install/setup.bash"
