@@ -14,10 +14,10 @@ echo "=== Halcon1 System Setup ==="
 echo "→ Initializing git submodules..."
 git submodule update --init --recursive
 
-# 2. Install PX4 Toolchain (with Gazebo Harmonic simulator)
-echo "→ Installing PX4 Toolchain with Gazebo Harmonic..."
+# 2. Install PX4 Toolchain (without simulator to avoid conflicts)
+echo "→ Installing PX4 Toolchain without simulator..."
 cd external/PX4-Autopilot
-bash ./Tools/setup/ubuntu.sh
+bash ./Tools/setup/ubuntu.sh --no-sim-tools
 cd "$SCRIPT_DIR"
 
 # 3. Build PX4 (optional, takes time)
@@ -39,13 +39,27 @@ cmake ..
 make -j$(nproc)
 cd "$SCRIPT_DIR"
 
-# 5. Install ROS2 Gazebo Bridge packages
-echo "→ Installing ROS2 Gazebo Bridge packages..."
+# 5. Clean and install Gazebo Fortress (compatible with ROS2 Humble)
+echo "→ Cleaning any existing Gazebo installations..."
+sudo apt remove -y gazebo* gz-* ignition-* || true
+sudo apt autoremove -y || true
+echo "✓ Existing Gazebo installations cleaned"
+
+echo "→ Installing Gazebo Fortress..."
 sudo apt update
-sudo apt install -y ros-humble-ros-gz ros-humble-gazebo-ros-pkgs
+sudo apt install -y lsb-release wget gnupg
+sudo wget https://packages.osrfoundation.org/gazebo.gpg -O /usr/share/keyrings/pkgs-osrf-archive-keyring.gpg
+echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/pkgs-osrf-archive-keyring.gpg] http://packages.osrfoundation.org/gazebo/ubuntu-stable $(lsb_release -cs) main" | sudo tee /etc/apt/sources.list.d/gazebo-stable.list > /dev/null
+sudo apt update
+sudo apt install -y gz-fortress
+echo "✓ Gazebo Fortress installed"
+
+# 6. Install ROS2 Gazebo Bridge packages
+echo "→ Installing ROS2 Gazebo Bridge packages..."
+sudo apt install -y ros-humble-ros-gz-bridge ros-humble-ros-gz-sim
 echo "✓ ROS2 Gazebo bridge packages installed"
 
-# 6. Build ROS2 workspace
+# 7. Build ROS2 workspace
 echo "→ Building ROS2 packages..."
 cd ws_ros2
 source /opt/ros/humble/setup.bash
@@ -58,7 +72,7 @@ colcon build --packages-select halcon1_bringup px4_offboard
 
 cd "$SCRIPT_DIR"
 
-# 7. Make all scripts executable
+# 8. Make all scripts executable
 echo "→ Making scripts executable..."
 chmod +x scripts/*.sh
 echo "✓ All scripts are now executable"
