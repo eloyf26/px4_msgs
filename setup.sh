@@ -14,13 +14,10 @@ echo "=== Halcon1 System Setup ==="
 echo "→ Initializing git submodules..."
 git submodule update --init --recursive
 
-# 2. Build MicroXRCE-DDS-Agent
-echo "→ Building MicroXRCE-DDS-Agent..."
-cd external/Micro-XRCE-DDS-Agent
-mkdir -p build
-cd build
-cmake ..
-make -j$(nproc)
+# 2. Install PX4 Toolchain (with Gazebo Harmonic simulator)
+echo "→ Installing PX4 Toolchain with Gazebo Harmonic..."
+cd external/PX4-Autopilot
+bash ./Tools/setup/ubuntu.sh
 cd "$SCRIPT_DIR"
 
 # 3. Build PX4 (optional, takes time)
@@ -33,10 +30,13 @@ if [[ $REPLY =~ ^[Yy]$ ]]; then
     cd "$SCRIPT_DIR"
 fi
 
-# 4. Install PX4 Toolchain (with Gazebo Harmonic simulator)
-echo "→ Installing PX4 Toolchain with Gazebo Harmonic..."
-cd external/PX4-Autopilot
-bash ./Tools/setup/ubuntu.sh
+# 4. Build MicroXRCE-DDS-Agent
+echo "→ Building MicroXRCE-DDS-Agent..."
+cd external/Micro-XRCE-DDS-Agent
+mkdir -p build
+cd build
+cmake ..
+make -j$(nproc)
 cd "$SCRIPT_DIR"
 
 # 5. Install ROS2 Gazebo Harmonic Bridge packages
@@ -77,3 +77,4 @@ echo "  /camera_info  - Camera calibration info"
 echo ""
 echo "Source ROS2 workspace:"
 echo "  source $SCRIPT_DIR/ws_ros2/install/setup.bash"
+echo ""
