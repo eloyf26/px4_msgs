@@ -40,10 +40,10 @@ make -j$(nproc)
 cd "$SCRIPT_DIR"
 
 # 5. Clean and install Gazebo Fortress (compatible with ROS2 Humble)
-echo "→ Cleaning any existing Gazebo installations..."
-sudo apt remove -y gazebo* gz-* ignition-* || true
+echo "→ Cleaning any existing Gazebo installations except Gazebo Fortress..."
+sudo apt list --installed | grep -E 'gazebo|gz-|ignition-' | grep -v 'gz-fortress' | awk -F/ '{print $1}' | xargs -r sudo apt remove -y
 sudo apt autoremove -y || true
-echo "✓ Existing Gazebo installations cleaned"
+echo "✓ Existing Gazebo installations (except Fortress) cleaned"
 
 echo "→ Installing Gazebo Fortress..."
 sudo apt update
@@ -54,10 +54,16 @@ sudo apt update
 sudo apt install -y gz-fortress
 echo "✓ Gazebo Fortress installed"
 
-# 6. Install ROS2 Gazebo Bridge packages
-echo "→ Installing ROS2 Gazebo Bridge packages..."
-sudo apt install -y ros-humble-ros-gz-bridge ros-humble-ros-gz-sim
-echo "✓ ROS2 Gazebo bridge packages installed"
+# 6. Install ROS2 Gazebo Bridge package
+echo "→ Setting up ROS2 repository for ros-gz packages..."
+# Ensure ROS2 repository is configured
+curl -s https://raw.githubusercontent.com/ros/rosdistro/master/ros.asc | sudo apt-key add -
+sudo sh -c 'echo "deb [arch=$(dpkg --print-architecture)] http://packages.ros.org/ros2/ubuntu $(lsb_release -cs) main" > /etc/apt/sources.list.d/ros2-latest.list'
+sudo apt update
+
+echo "→ Installing ROS2 Gazebo Bridge package..."
+sudo apt install -y ros-humble-ros-gz
+echo "✓ ROS2 Gazebo bridge package installed"
 
 # 7. Build ROS2 workspace
 echo "→ Building ROS2 packages..."
