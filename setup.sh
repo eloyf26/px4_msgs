@@ -39,11 +39,11 @@ cmake ..
 make -j$(nproc)
 cd "$SCRIPT_DIR"
 
-# 5. Install ROS2 Gazebo Harmonic Bridge packages
-echo "→ Installing ROS2 Gazebo Harmonic Bridge packages..."
+# 5. Install ROS2 Gazebo Bridge packages
+echo "→ Installing ROS2 Gazebo Bridge packages..."
 sudo apt update
-sudo apt install -y ros-humble-ros-gzharmonic ros-humble-ros-gz-image ros-humble-ros-gz-bridge
-echo "✓ ROS2 Gazebo Harmonic bridge packages installed"
+sudo apt install -y ros-humble-ros-gz ros-humble-gazebo-ros-pkgs
+echo "✓ ROS2 Gazebo bridge packages installed"
 
 # 6. Build ROS2 workspace
 echo "→ Building ROS2 packages..."

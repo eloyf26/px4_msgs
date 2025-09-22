@@ -13,4 +13,4 @@ source ../ws_ros2/install/setup.bash
 
 # Bridge camera image and camera info topics
 echo "→ Bridging /imager topic to ROS2..."
-ros2 run ros_gz_bridge parameter_bridge /imager@sensor_msgs/msg/Image@gz.msgs.Image /imager/camera_info@sensor_msgs/msg/CameraInfo@gz.msgs.CameraInfo --ros-args --remap /imager:=/camera --remap /imager/camera_info:=/camera_info
+ros2 run ros_gz_bridge parameter_bridge /imager@sensor_msgs/msg/Image@ignition.msgs.Image /imager/camera_info@sensor_msgs/msg/CameraInfo@ignition.msgs.CameraInfo --ros-args --remap /imager:=/camera --remap /imager/camera_info:=/camera_info
