@@ -51,7 +51,25 @@ sudo apt update
 sudo apt install -y ros-humble-desktop
 echo "✓ ROS2 Humble installed"
 
-# 6. Initialize rosdep and setup rules for Gazebo Harmonic
+# 6. Ensure ros_gz dependencies are installed
+echo "→ Ensuring ros_gz dependencies are installed..."
+sudo apt-get install -y \
+    libgflags-dev \
+    libgoogle-glog-dev \
+    libtinyxml2-dev \
+    libprotobuf-dev \
+    ros-humble-actuator-msgs \
+    ros-humble-gps-msgs \
+    ros-humble-vision-msgs \
+    ros-humble-tf2-ros \
+    ros-humble-image-transport \
+    ros-humble-nav-msgs \
+    ros-humble-sensor-msgs \
+    ros-humble-trajectory-msgs \
+    ros-humble-rosgraph-msgs
+echo "✓ ros_gz dependencies installed"
+
+# 7. Initialize rosdep and setup rules for Gazebo Harmonic
 echo "→ Setting up rosdep rules for Gazebo Harmonic..."
 sudo mkdir -p /etc/ros/rosdep/sources.list.d
 sudo bash -c 'wget https://raw.githubusercontent.com/osrf/osrf-rosdep/master/gz/00-gazebo.list -O /etc/ros/rosdep/sources.list.d/00-gazebo.list'
@@ -62,19 +80,25 @@ rosdep update
 rosdep resolve gz-harmonic
 echo "✓ Rosdep rules for Gazebo Harmonic installed"
 
-# 7. Clone ros_gz from source (humble branch)
-echo "→ Cloning ros_gz from source (humble branch)..."
-cd ws_ros2/src
-git clone https://github.com/gazebosim/ros_gz.git -b humble
-export GZ_VERSION=humble # Required for building ros_gz in step 9
-cd "$SCRIPT_DIR"
-echo "✓ ros_gz cloned from humble branch"
+# 8. Clone ros_gz from source (humble branch)
+echo "→ Ensuring ros_gz source (humble branch)..."
+if [ -d "ws_ros2/src/ros_gz/.git" ]; then
+    echo "↷ ros_gz already present; skipping clone"
+else
+    echo "→ Cloning ros_gz from source (humble branch)..."
+    cd ws_ros2/src
+    git clone https://github.com/gazebosim/ros_gz.git -b humble
+    cd "$SCRIPT_DIR"
+    echo "✓ ros_gz cloned from humble branch"
+fi
+export GZ_VERSION=harmonic # Required for building ros_gz in step 10
+echo "✓ GZ_VERSION=harmonic exported"
 
 # Install rqt_image_view for visualizing camera images
 sudo apt update
 sudo apt install -y ros-humble-rqt-image-view
 
-# 8. Build ROS2 workspace
+# 9. Build ROS2 workspace
 echo "→ Installing ROS2 build tools..."
 sudo apt install -y \
     python3-colcon-common-extensions \
@@ -93,8 +117,13 @@ echo "→ Building ROS2 packages..."
 cd ws_ros2
 source /opt/ros/humble/setup.bash
 
-# 8. Build in correct order
+# 10. Build in correct order
 echo "→ Building packages in correct order..."
+colcon build --packages-select ros_gz_interfaces
+colcon build --packages-select ros_gz_sim
+colcon build --packages-select ros_gz_bridge
+colcon build --packages-select ros_gz_image
+colcon build --packages-select ros_gz_sim_demos
 colcon build --packages-select ros_gz
 colcon build --packages-select halcon1_msgs
 colcon build --packages-select px4_msgs px4_ros_com
@@ -103,7 +132,11 @@ colcon build --packages-select halcon1_bringup px4_offboard
 
 cd "$SCRIPT_DIR"
 
-# 9. Make all scripts executable
+# 11. Disable GPU acceleration for Gazebo Harmonic (to avoid conflicts with gstreamer-1.0-nvcodec)
+export LIBGL_ALWAYS_SOFTWARE=1
+echo "✓ LIBGL_ALWAYS_SOFTWARE=1 exported"
+
+# 11. Make all scripts executable
 echo "→ Making scripts executable..."
 chmod +x scripts/*.sh
 chmod +x rebuild.sh
