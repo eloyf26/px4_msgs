@@ -52,15 +52,14 @@ sudo apt install -y ros-humble-desktop
 echo "✓ ROS2 Humble installed"
 
 # 6. Initialize rosdep and setup rules for Gazebo Harmonic
-echo "→ Initializing rosdep..."
-sudo rosdep init || true  # Don't fail if already initialized
-rosdep update
-
 echo "→ Setting up rosdep rules for Gazebo Harmonic..."
 sudo mkdir -p /etc/ros/rosdep/sources.list.d
-echo 'yaml https://raw.githubusercontent.com/osrf/osrf-rosdep/master/gazebo/gazebo.yaml' | sudo tee /etc/ros/rosdep/sources.list.d/00-gazebo.list
-echo 'yaml https://raw.githubusercontent.com/osrf/osrf-rosdep/master/gazebo2/gazebo2.yaml gazebo2' | sudo tee -a /etc/ros/rosdep/sources.list.d/00-gazebo.list
+sudo bash -c 'wget https://raw.githubusercontent.com/osrf/osrf-rosdep/master/gz/00-gazebo.list -O /etc/ros/rosdep/sources.list.d/00-gazebo.list'
+sudo apt update
+sudo apt install python3-rosdep -y
+sudo rosdep init || true  # Don't fail if already initialized
 rosdep update
+rosdep resolve gz-harmonic
 echo "✓ Rosdep rules for Gazebo Harmonic installed"
 
 # 7. Clone ros_gz from source (humble branch)
@@ -103,20 +102,36 @@ cd "$SCRIPT_DIR"
 # 9. Make all scripts executable
 echo "→ Making scripts executable..."
 chmod +x scripts/*.sh
+chmod +x rebuild.sh
+chmod +x launch_all.sh
 echo "✓ All scripts are now executable"
 
 echo "=== Setup Complete ==="
 echo ""
-echo "To use the system with camera:"
+echo "🚀 Quick Start Options:"
+echo ""
+echo "Option 1 - Launch Everything (Recommended):"
+echo "  ./launch_all.sh                                 # Launches all components automatically"
+echo ""
+echo "Option 2 - Manual Launch (4 terminals):"
 echo "  1. Terminal 1: ./scripts/launch_px4.sh          # PX4 SITL with x500_mono_cam"
 echo "  2. Terminal 2: ./scripts/launch_agent.sh        # MicroXRCE Agent (bridge PX4 → ROS2)"
 echo "  3. Terminal 3: ./scripts/launch_camera_bridge.sh # Camera bridge (Gazebo → ROS2)"
 echo "  4. Terminal 4: ./scripts/launch_halcon1.sh       # Halcon1 ROS2 nodes Pipeline"
 echo ""
-echo "Camera feed will be available on ROS2 topics:"
+echo "🔧 Development Tools:"
+echo "  ./rebuild.sh                                     # Quick rebuild after code changes"
+echo "  ./rebuild.sh <package_name>                     # Rebuild specific package"
+echo "  ./scripts/launch_rviz.sh                        # Launch RViz2 for visualization"
+echo ""
+echo "📊 Available ROS2 Topics:"
 echo "  /camera/image       - Camera images (sensor_msgs/Image)"
 echo "  /camera/camera_info - Camera calibration info"
+echo "  /enemy/detection    - Target detections @ 10Hz"
+echo "  /enemy/tracked      - Target tracking @ 10Hz"
+echo "  /enemy/predicted    - Trajectory predictions @ 10Hz"
+echo "  /interception/command - Interception commands @ 10Hz"
 echo ""
-echo "Source ROS2 workspace:"
+echo "Source ROS2 workspace in new terminals:"
 echo "  source $SCRIPT_DIR/ws_ros2/install/setup.bash"
 echo ""
