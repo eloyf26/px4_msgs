@@ -51,29 +51,27 @@ sudo apt update
 sudo apt install -y ros-humble-desktop
 echo "✓ ROS2 Humble installed"
 
-# 6. Install ROS2 Gazebo Bridge package
-echo "→ Installing ROS2 Bridge for Gazebo Harmonic package from source (humble branch)..."
-sudo sh -c 'echo "deb [arch=$(dpkg --print-architecture)] http://packages.ros.org/ros2/ubuntu $(lsb_release -cs) main" > /etc/apt/sources.list.d/ros2-latest.list'
-curl -s https://raw.githubusercontent.com/ros/rosdistro/master/ros.asc | sudo apt-key add -
-sudo apt-get update
-
-# Install rosdep if not already installed
-sudo bash -c 'wget https://raw.githubusercontent.com/osrf/osrf-rosdep/master/gz/00-gazebo.list -O /etc/ros/rosdep/sources.list.d/00-gazebo.list'
+# 6. Initialize rosdep and setup rules for Gazebo Harmonic
+echo "→ Initializing rosdep..."
+sudo rosdep init || true  # Don't fail if already initialized
 rosdep update
-# check that resolve works
-rosdep resolve gz-harmonic
-sudo apt install ros-humble-ros-gz
-sudo apt-get install ros-humble-ros-gzharmonic
-sudo apt install ros-humble-ros-gzharmonic-image ros-humble-ros-gzharmonic-sim ros-humble-ros-gzharmonic-bridge
 
-# Copmile ros2 rolling from source
+echo "→ Setting up rosdep rules for Gazebo Harmonic..."
+sudo mkdir -p /etc/ros/rosdep/sources.list.d
+echo 'yaml https://raw.githubusercontent.com/osrf/osrf-rosdep/master/gazebo/gazebo.yaml' | sudo tee /etc/ros/rosdep/sources.list.d/00-gazebo.list
+echo 'yaml https://raw.githubusercontent.com/osrf/osrf-rosdep/master/gazebo2/gazebo2.yaml gazebo2' | sudo tee -a /etc/ros/rosdep/sources.list.d/00-gazebo.list
+rosdep update
+echo "✓ Rosdep rules for Gazebo Harmonic installed"
+
+# 7. Clone ros_gz from source (humble branch)
+echo "→ Cloning ros_gz from source (humble branch)..."
 cd ws_ros2/src
-export GZ_VERSION=humble # Needed when compiling only
 git clone https://github.com/gazebosim/ros_gz.git -b humble
-cd ..
-rosdep install -r --from-paths src -i -y --rosdistro humble
+export GZ_VERSION=humble # Required for building ros_gz in step 9
+cd "$SCRIPT_DIR"
+echo "✓ ros_gz cloned from humble branch"
 
-# 7. Build ROS2 workspace
+# 8. Build ROS2 workspace
 echo "→ Installing ROS2 build tools..."
 sudo apt install -y \
     python3-colcon-common-extensions \
@@ -92,7 +90,7 @@ echo "→ Building ROS2 packages..."
 cd ws_ros2
 source /opt/ros/humble/setup.bash
 
-# 7. Build in correct order
+# 8. Build in correct order
 echo "→ Building packages in correct order..."
 colcon build --packages-select ros_gz
 colcon build --packages-select halcon1_msgs
@@ -102,7 +100,7 @@ colcon build --packages-select halcon1_bringup px4_offboard
 
 cd "$SCRIPT_DIR"
 
-# 8. Make all scripts executable
+# 9. Make all scripts executable
 echo "→ Making scripts executable..."
 chmod +x scripts/*.sh
 echo "✓ All scripts are now executable"
