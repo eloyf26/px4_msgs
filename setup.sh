@@ -68,9 +68,10 @@ sudo apt install ros-humble-ros-gzharmonic-image ros-humble-ros-gzharmonic-sim r
 
 # Copmile ros2 rolling from source
 cd ws_ros2/src
-git clone https://github.com/gazebosim/ros_gz.git -b ros2
+export GZ_VERSION=humble # Needed when compiling only
+git clone https://github.com/gazebosim/ros_gz.git -b humble
 cd ..
-rosdep install -r --from-paths src -i -y --rosdistro rolling
+rosdep install -r --from-paths src -i -y --rosdistro humble
 
 # 7. Build ROS2 workspace
 echo "→ Installing ROS2 build tools..."
@@ -93,6 +94,7 @@ source /opt/ros/humble/setup.bash
 
 # 7. Build in correct order
 echo "→ Building packages in correct order..."
+colcon build --packages-select ros_gz
 colcon build --packages-select halcon1_msgs
 colcon build --packages-select px4_msgs px4_ros_com
 colcon build --packages-select halcon1_detection halcon1_tracking halcon1_prediction halcon1_interception
