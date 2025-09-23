@@ -39,14 +39,26 @@ cmake ..
 make -j$(nproc)
 cd "$SCRIPT_DIR"
 
-# 5. Install ROS2 Gazebo Bridge package
+# 5. Install ROS2 Humble
+echo "→ Installing ROS2 Humble..."
+sudo apt update
+sudo apt install -y software-properties-common
+sudo add-apt-repository universe
+sudo apt update && sudo apt install -y curl
+curl -sSL https://raw.githubusercontent.com/ros/rosdistro/master/ros.key -o /usr/share/keyrings/ros-archive-keyring.gpg
+echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/ros-archive-keyring.gpg] http://packages.ros.org/ros2/ubuntu $(. /etc/os-release && echo $UBUNTU_CODENAME) main" | sudo tee /etc/apt/sources.list.d/ros2.list > /dev/null
+sudo apt update
+sudo apt install -y ros-humble-desktop
+echo "✓ ROS2 Humble installed"
+
+# 6. Install ROS2 Gazebo Bridge package
 echo "→ Installing ROS2 Bridge for Gazebo Harmonic package from source (humble branch)..."
 sudo sh -c 'echo "deb [arch=$(dpkg --print-architecture)] http://packages.ros.org/ros2/ubuntu $(lsb_release -cs) main" > /etc/apt/sources.list.d/ros2-latest.list'
 curl -s https://raw.githubusercontent.com/ros/rosdistro/master/ros.asc | sudo apt-key add -
 sudo apt-get update
 sudo apt install ros-humble-ros-gz
 
-# 6. Build ROS2 workspace
+# 7. Build ROS2 workspace
 echo "→ Installing ROS2 build tools..."
 sudo apt install -y \
     python3-colcon-common-extensions \
