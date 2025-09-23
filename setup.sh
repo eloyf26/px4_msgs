@@ -45,7 +45,7 @@ sudo apt update
 sudo apt install -y software-properties-common
 sudo add-apt-repository universe
 sudo apt update && sudo apt install -y curl
-curl -sSL https://raw.githubusercontent.com/ros/rosdistro/master/ros.key -o /usr/share/keyrings/ros-archive-keyring.gpg
+sudo curl -sSL https://raw.githubusercontent.com/ros/rosdistro/master/ros.key -o /usr/share/keyrings/ros-archive-keyring.gpg
 echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/ros-archive-keyring.gpg] http://packages.ros.org/ros2/ubuntu $(. /etc/os-release && echo $UBUNTU_CODENAME) main" | sudo tee /etc/apt/sources.list.d/ros2.list > /dev/null
 sudo apt update
 sudo apt install -y ros-humble-desktop
@@ -100,8 +100,8 @@ echo "  3. Terminal 3: ./scripts/launch_camera_bridge.sh # Camera bridge (Gazebo
 echo "  4. Terminal 4: ./scripts/launch_halcon1.sh       # Halcon1 ROS2 nodes Pipeline"
 echo ""
 echo "Camera feed will be available on ROS2 topics:"
-echo "  /camera       - Camera images (sensor_msgs/Image)"
-echo "  /camera_info  - Camera calibration info"
+echo "  /camera/image       - Camera images (sensor_msgs/Image)"
+echo "  /camera/camera_info - Camera calibration info"
 echo ""
 echo "Source ROS2 workspace:"
 echo "  source $SCRIPT_DIR/ws_ros2/install/setup.bash"
