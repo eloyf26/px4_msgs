@@ -103,7 +103,6 @@ cd "$SCRIPT_DIR"
 echo "→ Making scripts executable..."
 chmod +x scripts/*.sh
 chmod +x rebuild.sh
-chmod +x launch_all.sh
 echo "✓ All scripts are now executable"
 
 echo "=== Setup Complete ==="
@@ -121,8 +120,6 @@ echo "  4. Terminal 4: ./scripts/launch_halcon1.sh       # Halcon1 ROS2 nodes Pi
 echo ""
 echo "🔧 Development Tools:"
 echo "  ./rebuild.sh                                     # Quick rebuild after code changes"
-echo "  ./rebuild.sh <package_name>                     # Rebuild specific package"
-echo "  ./scripts/launch_rviz.sh                        # Launch RViz2 for visualization"
 echo ""
 echo "📊 Available ROS2 Topics:"
 echo "  /camera/image       - Camera images (sensor_msgs/Image)"
