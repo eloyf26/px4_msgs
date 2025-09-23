@@ -70,6 +70,10 @@ export GZ_VERSION=humble # Required for building ros_gz in step 9
 cd "$SCRIPT_DIR"
 echo "✓ ros_gz cloned from humble branch"
 
+# Install rqt_image_view for visualizing camera images
+sudo apt update
+sudo apt install -y ros-humble-rqt-image-view
+
 # 8. Build ROS2 workspace
 echo "→ Installing ROS2 build tools..."
 sudo apt install -y \
@@ -107,14 +111,10 @@ echo "✓ All scripts are now executable"
 
 echo "=== Setup Complete ==="
 echo ""
-echo "🚀 Quick Start Options:"
+echo "🚀 To use the system:"
 echo ""
-echo "Option 1 - Launch Everything (Recommended):"
-echo "  ./launch_all.sh                                 # Launches all components automatically"
-echo ""
-echo "Option 2 - Manual Launch (4 terminals):"
-echo "  1. Terminal 1: ./scripts/launch_px4.sh          # PX4 SITL with x500_mono_cam"
-echo "  2. Terminal 2: ./scripts/launch_agent.sh        # MicroXRCE Agent (bridge PX4 → ROS2)"
+echo "  1. Terminal 1: ./scripts/launch_px4.sh           # PX4 SITL with x500_mono_cam"
+echo "  2. Terminal 2: ./scripts/launch_agent.sh         # MicroXRCE Agent (bridge PX4 → ROS2)"
 echo "  3. Terminal 3: ./scripts/launch_camera_bridge.sh # Camera bridge (Gazebo → ROS2)"
 echo "  4. Terminal 4: ./scripts/launch_halcon1.sh       # Halcon1 ROS2 nodes Pipeline"
 echo ""
