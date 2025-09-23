@@ -56,7 +56,21 @@ echo "→ Installing ROS2 Bridge for Gazebo Harmonic package from source (humble
 sudo sh -c 'echo "deb [arch=$(dpkg --print-architecture)] http://packages.ros.org/ros2/ubuntu $(lsb_release -cs) main" > /etc/apt/sources.list.d/ros2-latest.list'
 curl -s https://raw.githubusercontent.com/ros/rosdistro/master/ros.asc | sudo apt-key add -
 sudo apt-get update
+
+# Install rosdep if not already installed
+sudo bash -c 'wget https://raw.githubusercontent.com/osrf/osrf-rosdep/master/gz/00-gazebo.list -O /etc/ros/rosdep/sources.list.d/00-gazebo.list'
+rosdep update
+# check that resolve works
+rosdep resolve gz-harmonic
 sudo apt install ros-humble-ros-gz
+sudo apt-get install ros-humble-ros-gzharmonic
+sudo apt install ros-humble-ros-gzharmonic-image ros-humble-ros-gzharmonic-sim ros-humble-ros-gzharmonic-bridge
+
+# Copmile ros2 rolling from source
+cd ws_ros2/src
+git clone https://github.com/gazebosim/ros_gz.git -b ros2
+cd ..
+rosdep install -r --from-paths src -i -y --rosdistro rolling
 
 # 7. Build ROS2 workspace
 echo "→ Installing ROS2 build tools..."
