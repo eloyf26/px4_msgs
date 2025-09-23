@@ -260,6 +260,44 @@ rm -rf build install log
 colcon build
 ```
 
+### Mono Camera Issue
+
+If you can't see the camera feed in `rqt_image_view`, follow these steps to diagnose the issue:
+
+1. Verify Gazebo is running the x500_mono_cam model.
+2. Verify that gazebo is publishing 2 gz topics for the camera by running this command:
+```bash
+gz topic --list | grep camera
+```
+You should see something like:
+```
+/camera/camera_info
+/camera/image
+```
+3. Verify that the camera bridge is converting those topics into ros2 topics by running:
+```bash
+ros2 topic list | grep camera
+```
+You should see:
+```
+/camera/camera_info
+/camera/image
+```
+4. Echo one of the topics to see if data is being published:
+```bash
+ros2 topic echo /camera/camera_info --once
+```
+You should see camera calibration info data.
+
+Most probably you will find the issue in step 4 (everything looks good but ros2 topic doesn't get any data published). If
+you do, the reason is a missmatch in your gazebo and ros2 installation. PX4 is only compatible with Gazebo Harmonic, on the
+other hand we use ROS2 Humble, which can bridge Gazebo Fortress out of the box. To bridge Gazebo Harmonic with ROS2 Humble
+you need to build `ros_gz` package from source, from the custom `humble` branch. Then install some `ros_dep` pacakges that
+provide linking between `ros_gz` and `gazebo_ros_pkgs`. Finally, you need to build `ros_gz` using `colcon`. All these steps
+are included in `setup.sh` so if you run it again it should fix the issue. Otherwise, you may have conflicting installations
+that are preventing setup from running properly. In that case try to uninstall them manually or start over with a clean
+Ubuntu 22.04 machine.
+
 ## License
 
 Apache 2.0 - See LICENSE file
