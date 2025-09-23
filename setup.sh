@@ -132,10 +132,6 @@ colcon build --packages-select halcon1_bringup px4_offboard
 
 cd "$SCRIPT_DIR"
 
-# 11. Disable GPU acceleration for Gazebo Harmonic (to avoid conflicts with gstreamer-1.0-nvcodec)
-export LIBGL_ALWAYS_SOFTWARE=1
-echo "✓ LIBGL_ALWAYS_SOFTWARE=1 exported"
-
 # 11. Make all scripts executable
 echo "→ Making scripts executable..."
 chmod +x scripts/*.sh
