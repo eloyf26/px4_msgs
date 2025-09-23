@@ -117,6 +117,7 @@ echo "  1. Terminal 1: ./scripts/launch_px4.sh           # PX4 SITL with x500_mo
 echo "  2. Terminal 2: ./scripts/launch_agent.sh         # MicroXRCE Agent (bridge PX4 → ROS2)"
 echo "  3. Terminal 3: ./scripts/launch_camera_bridge.sh # Camera bridge (Gazebo → ROS2)"
 echo "  4. Terminal 4: ./scripts/launch_halcon1.sh       # Halcon1 ROS2 nodes Pipeline"
+echo "  5. (Optional - to visualize camera images) Terminal 5: ros2 run rqt_image_view  rqt_image_view"
 echo ""
 echo "🔧 Development Tools:"
 echo "  ./rebuild.sh                                     # Quick rebuild after code changes"

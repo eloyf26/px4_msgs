@@ -22,7 +22,25 @@ cd halcon1-system
 # Launch system (3 terminals)
 ./scripts/launch_px4_offboard.sh      # Terminal 1: PX4 SITL
 ./scripts/launch_agent.sh    # Terminal 2: MicroXRCE Agent
-./scripts/launch_halcon1.sh  # Terminal 3: Halcon1 Pipeline
+./scripts/launch_camera_bridge.sh # Terminal 3: Camera Bridge
+./scripts/launch_halcon1.sh  # Terminal 4: Halcon1 Pipeline
+```
+
+If you want to visualize the images captured by the simulated mono-camera you can run:
+
+```bash
+ros2 run rqt_image_view rqt_image_view
+# Select /camera/image topic
+```
+
+You can also visualize the feed of any of the available ros2 topics:
+
+```bash
+ros2 topic echo /camera/camera_info --once
+ros2 topic echo /enemy/detection --once
+ros2 topic echo /enemy/tracked --once
+ros2 topic echo /enemy/predicted --once
+ros2 topic echo /interception/command --once
 ```
 
 ## Repository Structure
@@ -65,12 +83,14 @@ halcon1-system/
 ### Setup Instructions
 
 1. **Clone the repository:**
+
 ```bash
-git clone --recursive https://github.com/yourusername/halcon1-system.git
+git clone --recursive https://github.com/eloyf26/halcon1-system.git
 cd halcon1-system
 ```
 
 2. **Run the setup script:**
+
 ```bash
 ./setup.sh
 ```
@@ -79,6 +99,8 @@ This will:
 - Initialize git submodules
 - Build MicroXRCE-DDS-Agent
 - Build PX4 SITL (optional)
+- Install ROS2
+- Install ROS2 Gazebo Bridge
 - Build all ROS2 packages
 
 ## Running the System
@@ -93,22 +115,33 @@ This will:
 ### Three-Terminal Setup
 
 **Terminal 1: PX4 SITL**
+
 ```bash
 ./scripts/launch_px4.sh
 # Or for offboard control:
 ./scripts/launch_px4_offboard.sh
 ```
-- Launches Gazebo with X500 quadcopter
+- Launches Gazebo with X500 quadcopter and mono camera
 - ⚠️ **Requires QGroundControl to be running**
 
 **Terminal 2: MicroXRCE Agent**
+
 ```bash
 ./scripts/launch_agent.sh
 ```
 - Bridges PX4 and ROS2 communication
 - Runs on UDP port 8888
 
-**Terminal 3: Halcon1 Pipeline**
+**Termianl 3: Camera Bridge**
+
+```bash
+./scripts/launch_camera_bridge.sh
+```
+
+- Bridges Gazebo camera to ROS2 `/camera/image` topic
+
+**Terminal 4: Halcon1 Pipeline**
+
 ```bash
 ./scripts/launch_halcon1.sh
 # Or for offboard control demo:
@@ -116,7 +149,7 @@ This will:
 ```
 - Starts processing nodes or offboard control
 
-### Monitor System (Terminal 4)
+### Monitor System (Terminal 5)
 
 ```bash
 # Source workspace
@@ -132,6 +165,9 @@ ros2 topic echo /interception/command --once
 
 # List all topics
 ros2 topic list
+
+# Visualize mono camera ros2 node feed
+ros2 run rqt_image_view rqt_image_view # Select /camera/image topic
 ```
 
 ## Pipeline Modules
@@ -187,9 +223,19 @@ source install/setup.bash
 ros2 launch halcon1_bringup pipeline.launch.py
 ```
 
+This spins up your ros2 node. Once it is spinned up you can feed it data by publishing to it's subscribed topics:
+
+```bash
+# Example: Publish fake detection
+ros2 topic pub /enemy/detection halcon1_msgs/Detection '{header: {stamp: {sec: 0, nanosec: 0}, frame_id: "camera_frame"}, x: 320.0, y: 240.0}'
+# Check output
+ros2 topic echo /enemy/tracked --once
+```
+
 ## Troubleshooting
 
 ### PX4 Build Issues
+
 ```bash
 cd external/PX4-Autopilot
 rm -rf build
@@ -198,6 +244,7 @@ make px4_sitl gz_x500
 ```
 
 ### MicroXRCE Connection Issues
+
 ```bash
 # Kill existing agents
 pkill MicroXRCEAgent
@@ -206,6 +253,7 @@ pkill MicroXRCEAgent
 ```
 
 ### ROS2 Build Issues
+
 ```bash
 cd ws_ros2
 rm -rf build install log
