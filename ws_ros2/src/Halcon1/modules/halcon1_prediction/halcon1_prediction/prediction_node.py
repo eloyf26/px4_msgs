@@ -3,8 +3,9 @@ from rclpy.node import Node
 from geometry_msgs.msg import PoseStamped
 from nav_msgs.msg import Path
 from halcon1_prediction.predictor import Predictor
-from halcon1_prediction.utils import KalmanFilterParameters, MonteCarloParameters
-from halcon1_types import DronePose
+from halcon1_prediction.utils.kalman_filter import KalmanFilterParameters
+from halcon1_prediction.utils.monte_carlo import MonteCarloParameters
+from halcon1_types import DronePose, TimestampedTrajectory
 
 class PredictionNode(Node):
     def __init__(self):
@@ -34,14 +35,14 @@ class PredictionNode(Node):
         trajectory_prediction = self.predictor.predict(enemy_pose, timestamp)
         self.publish_prediction(trajectory_prediction, msg.header)
 
-    def publish_prediction(self, trajectory_prediction, original_header):
+    def publish_prediction(self, trajectory_prediction: TimestampedTrajectory, original_header):
         """Convert trajectory prediction to NavPath and publish"""
         path_msg = Path()
         path_msg.header.stamp = original_header.stamp
         path_msg.header.frame_id = 'world'
 
         # Convert trajectory prediction array to PoseStamped messages
-        for timestamp, drone_pose in trajectory_prediction:
+        for timestamp, drone_pose in zip(trajectory_prediction.timestamps, trajectory_prediction.positions):
             pose_stamped = PoseStamped()
             pose_stamped.header.stamp.sec = int(timestamp)
             pose_stamped.header.stamp.nanosec = int((timestamp - int(timestamp)) * 1e9)

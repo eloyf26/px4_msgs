@@ -1,7 +1,7 @@
 from halcon1_types import DronePose
 import numpy as np
-from halcon1_prediction.utils import KalmanFilter, KalmanFilterParameters
-from halcon1_prediction.utils import MonteCarloPredictor, MonteCarloParameters
+from halcon1_prediction.utils.kalman_filter import KalmanFilter, KalmanFilterParameters
+from halcon1_prediction.utils.monte_carlo import MonteCarloPredictor, MonteCarloParameters
 
 from halcon1_types import TimestampedTrajectory
 
@@ -17,13 +17,9 @@ class Predictor:
         self.mc = MonteCarloPredictor(self.mc.params)
         self.estimated_trajectory = TimestampedTrajectory([], [])
 
-    def predict(self, enemy_pose: DronePose, timestamp: float):
-        # Add measurement update to Kalman filter
-        measurement = np.array([
-            enemy_pose.x, enemy_pose.y, enemy_pose.z
-        ])
-        
-        estimated_state = self.kf.update(measurement, timestamp)
+    def predict(self, enemy_pose: DronePose, timestamp: float) -> TimestampedTrajectory:
+        # Add measurement update to Kalman filter (pass DronePose directly)
+        estimated_state = self.kf.update(enemy_pose, timestamp)
 
         self.estimated_trajectory.timestamps.append(timestamp)
         self.estimated_trajectory.positions.append(estimated_state)
