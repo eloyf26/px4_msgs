@@ -3,8 +3,7 @@ from rclpy.node import Node
 from geometry_msgs.msg import PoseStamped
 from nav_msgs.msg import Path
 from halcon1_prediction.predictor import Predictor
-from halcon1_prediction.predictor.utils.kalman_filter import KalmanFilterParameters
-from halcon1_prediction.predictor.utils.monte_carlo import MonteCarloParameters
+from halcon1_prediction.utils import KalmanFilterParameters, MonteCarloParameters
 from halcon1_types import DronePose
 
 class PredictionNode(Node):

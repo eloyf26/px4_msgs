@@ -50,9 +50,9 @@ class TrackingNode(Node):
 
     def detection_callback(self, msg):
         """Process enemy detection and transform to world coordinates"""
-        # Need friendly pose to do coordinate transformation
+        # Need friendly pose to do coordinatrie transformation
         if self.friendly_pose is None:
-            self.get_logger().warn_throttle(5.0, 'No friendly pose available for coordinate transformation')
+            self.get_logger().info('No friendly pose available for coordinate transformation')
             return
 
         # Create a DroneDetection-like object to pass to coordinate transform

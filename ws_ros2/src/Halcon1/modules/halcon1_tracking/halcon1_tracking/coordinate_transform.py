@@ -1,5 +1,6 @@
 import numpy as np
-from halcon1_types import DronePose, DroneDetection
+from halcon1_types import DronePose
+from halcon1_msgs.msg import DroneDetection
 
 class CoordinateTransform:
     def __init__(self):

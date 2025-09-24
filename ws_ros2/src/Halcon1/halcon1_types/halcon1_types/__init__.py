@@ -1,3 +1,3 @@
-from .types import DetectionResult, DronePose
+from .types import DetectionResult, DronePose, TimestampedTrajectory
 
-__all__ = ['DetectionResult', 'DronePose']
+__all__ = ['DetectionResult', 'DronePose', 'TimestampedTrajectory']

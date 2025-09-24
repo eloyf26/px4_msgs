@@ -4,8 +4,11 @@
   <name>halcon1_types</name>
   <version>0.0.0</version>
   <description>Shared Python types for Halcon1 system</description>
-  <maintainer email="martin.chaya@todo.todo">martin.chaya</maintainer>
+  <maintainer email="dev@halcon.com">Halcon Team</maintainer>
   <license>TODO: License declaration</license>
+
+  <buildtool_depend>ament_python</buildtool_depend>
+  <exec_depend>python3-setuptools</exec_depend>
 
   <test_depend>ament_copyright</test_depend>
   <test_depend>ament_flake8</test_depend>

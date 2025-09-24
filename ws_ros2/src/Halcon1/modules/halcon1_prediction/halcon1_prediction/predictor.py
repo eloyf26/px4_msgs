@@ -1,7 +1,7 @@
 from halcon1_types import DronePose
 import numpy as np
-from halcon1_prediction.predictor.utils.kalman_filter import KalmanFilter, KalmanFilterParameters
-from halcon1_prediction.predictor.utils.monte_carlo import MonteCarloPredictor, MonteCarloParameters
+from halcon1_prediction.utils import KalmanFilter, KalmanFilterParameters
+from halcon1_prediction.utils import MonteCarloPredictor, MonteCarloParameters
 
 from halcon1_types import TimestampedTrajectory
 

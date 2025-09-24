@@ -8,6 +8,7 @@
 
   <depend>rclpy</depend>
   <depend>halcon1_msgs</depend>
+  <depend>halcon1_types</depend>
   <depend>std_msgs</depend>
 
   <test_depend>ament_copyright</test_depend>

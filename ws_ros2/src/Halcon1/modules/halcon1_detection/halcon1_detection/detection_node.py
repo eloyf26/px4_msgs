@@ -9,23 +9,15 @@ class DetectionNode(Node):
     def __init__(self):
         super().__init__('detection_node')
 
-        # QoS profile for PX4 topics
-        qos_profile = QoSProfile(
-            reliability=ReliabilityPolicy.BEST_EFFORT,
-            durability=DurabilityPolicy.TRANSIENT_LOCAL,
-            history=HistoryPolicy.KEEP_LAST,
-            depth=1
-        )
-
         # Publisher for detections
         self.detection_pub = self.create_publisher(DroneDetection, '/enemy/detection', 10)
 
-        # Subscriber for camera images
+        # Subscriber for camera images (use standard sensor QoS)
         self.image_sub = self.create_subscription(
             Image,
             '/camera/image',
             self.image_callback,
-            qos_profile
+            10  # Use default QoS for sensor data
         )
 
         # Detection algorithm
