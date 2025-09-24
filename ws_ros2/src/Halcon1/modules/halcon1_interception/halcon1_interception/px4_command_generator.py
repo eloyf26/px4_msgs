@@ -32,7 +32,7 @@ class PX4CommandGenerator:
         return setpoint
 
     @staticmethod
-    def generate_interception_trajectory(self, timestamped_trajectory: TimestampedTrajectory,
+    def generate_interception_trajectory(timestamped_trajectory: TimestampedTrajectory,
                                        init_timestamp: float) -> InterceptionTrajectory:
         """Convert TimestampedTrajectory to InterceptionTrajectory with PX4 TrajectorySetpoints"""
         setpoints = []
@@ -82,3 +82,16 @@ class PX4CommandGenerator:
         current_setpoint.yawspeed = target_setpoint.yawspeed
 
         return current_setpoint
+
+    @staticmethod
+    def is_trajectory_complete(interception_trajectory: InterceptionTrajectory,
+                              current_time: float) -> bool:
+        """Check if trajectory is complete"""
+        if not interception_trajectory.is_active or len(interception_trajectory.setpoints) == 0:
+            return True
+
+        # Get last setpoint time
+        last_setpoint = interception_trajectory.setpoints[-1]
+        last_setpoint_time = last_setpoint.timestamp / 1e6
+
+        return current_time >= last_setpoint_time
