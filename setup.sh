@@ -126,6 +126,7 @@ colcon build --packages-select ros_gz_image
 colcon build --packages-select ros_gz_sim_demos
 colcon build --packages-select ros_gz
 colcon build --packages-select halcon1_msgs
+colcon build --packages-select halcon1_types
 colcon build --packages-select px4_msgs px4_ros_com
 colcon build --packages-select halcon1_detection halcon1_tracking halcon1_prediction halcon1_interception
 colcon build --packages-select halcon1_bringup px4_offboard
