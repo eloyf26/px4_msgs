@@ -1,93 +1,83 @@
 import rclpy
 from rclpy.node import Node
-import numpy as np
-from halcon1_msgs.msg import DroneDetection, EnemyPose
+from rclpy.qos import QoSProfile, ReliabilityPolicy, DurabilityPolicy, HistoryPolicy
+from halcon1_msgs.msg import DroneDetection
+from geometry_msgs.msg import PoseStamped
 from px4_msgs.msg import VehicleLocalPosition, VehicleOdometry
 from halcon1_tracking.coordinate_transform import CoordinateTransform
-from std_msgs.msg import Header
+from halcon1_types import DronePose
 
 class TrackingNode(Node):
     def __init__(self):
         super().__init__('tracking_node')
 
+        # QoS profile for PX4 topics
+        qos_profile = QoSProfile(
+            reliability=ReliabilityPolicy.BEST_EFFORT,
+            durability=DurabilityPolicy.TRANSIENT_LOCAL,
+            history=HistoryPolicy.KEEP_LAST,
+            depth=1
+        )
+
         # Publishers
-        self.enemy_pub = self.create_publisher(EnemyPose, '/enemy/pose', 10)
+        self.enemy_pose_pub = self.create_publisher(PoseStamped, '/enemy/pose', 10)
 
         # Subscribers
         self.detection_sub = self.create_subscription(
             DroneDetection, '/enemy/detection',
             self.detection_callback, 10)
         self.friendly_sub = self.create_subscription(
-            VehicleLocalPosition, '/fmu/out/vehicle_local_position',
-            self.friendly_callback, 10)
+            VehicleOdometry, '/fmu/out/vehicle_odometry',
+            self.friendly_callback, qos_profile)
 
         # Coordinate transform
         self.transform = CoordinateTransform()
 
         # State
-        self.friendly_position = np.array([0.0, 0.0, 0.0])
-        self.friendly_velocity = np.array([0.0, 0.0, 0.0])
-        self.last_enemy_position = None
-        self.last_detection_time = None
+        self.friendly_pose = None
+
+        self.get_logger().info('Tracking node initialized - waiting for detections and friendly pose...')
 
     def friendly_callback(self, msg):
-        """Update friendly drone position from PX4"""
-        if msg.xy_valid and msg.z_valid:
-            self.friendly_position = np.array([msg.x, msg.y, msg.z])
-        if msg.v_xy_valid and msg.v_z_valid:
-            self.friendly_velocity = np.array([msg.vx, msg.vy, msg.vz])
+        """Update friendly drone pose from PX4 odometry (includes orientation)"""
+        # Store full pose with position and orientation
+        self.friendly_pose = DronePose(
+            x=msg.position[0],
+            y=msg.position[1],
+            z=msg.position[2]
+        )
+        # Note: VehicleOdometry also contains quaternion in msg.q for future use
 
     def detection_callback(self, msg):
         """Process enemy detection and transform to world coordinates"""
-        # Only process valid detections
-        if msg.confidence < 0.5:
+        # Need friendly pose to do coordinatrie transformation
+        if self.friendly_pose is None:
+            self.get_logger().info('No friendly pose available for coordinate transformation')
             return
 
-        # Transform pixel detection to world NED coordinates
-        enemy_pos_ned = self.transform.pixel_to_world_ned(
-            msg.x, msg.y,
-            self.friendly_position,
-            estimated_distance=15.0  # Fixed distance estimate for now
-        )
+        # Create a DroneDetection-like object to pass to coordinate transform
+        # (We need to import/create the DetectionResult type, but for now using the message directly)
 
-        # Estimate velocity from position change
-        current_time = self.get_clock().now()
-        if self.last_enemy_position is not None and self.last_detection_time is not None:
-            dt = (current_time - self.last_detection_time).nanoseconds / 1e9
-            if dt > 0:
-                velocity = (enemy_pos_ned - self.last_enemy_position) / dt
-            else:
-                velocity = np.array([0.0, 0.0, 0.0])
-        else:
-            velocity = np.array([0.0, 0.0, 0.0])
+        # Use the coordinate transform to convert to world coordinates
+        enemy_world_pose = self.transform.camera_to_world_coordinates(msg, self.friendly_pose)
 
-        # Update state
-        self.last_enemy_position = enemy_pos_ned
-        self.last_detection_time = current_time
+        # Create and publish PoseStamped message
+        pose_msg = PoseStamped()
+        pose_msg.header.stamp = msg.header.stamp  # Propagate original detection timestamp
+        pose_msg.header.frame_id = 'world'
 
-        # Publish enemy pose
-        enemy_msg = EnemyPose()
-        enemy_msg.header = Header()
-        enemy_msg.header.stamp = current_time.to_msg()
-        enemy_msg.header.frame_id = 'world_ned'
+        # Position from coordinate transform result
+        pose_msg.pose.position.x = enemy_world_pose.x
+        pose_msg.pose.position.y = enemy_world_pose.y
+        pose_msg.pose.position.z = enemy_world_pose.z
 
-        enemy_msg.x = enemy_pos_ned[0]
-        enemy_msg.y = enemy_pos_ned[1]
-        enemy_msg.z = enemy_pos_ned[2]
-        enemy_msg.vx = velocity[0]
-        enemy_msg.vy = velocity[1]
-        enemy_msg.vz = velocity[2]
+        # Orientation (identity quaternion for now as requested)
+        pose_msg.pose.orientation.x = 0.0
+        pose_msg.pose.orientation.y = 0.0
+        pose_msg.pose.orientation.z = 0.0
+        pose_msg.pose.orientation.w = 1.0
 
-        # Simple covariance (diagonal)
-        enemy_msg.covariance = [0.0] * 36
-        enemy_msg.covariance[0] = 1.0  # x variance
-        enemy_msg.covariance[7] = 1.0  # y variance
-        enemy_msg.covariance[14] = 1.0  # z variance
-        enemy_msg.covariance[21] = 2.0  # vx variance
-        enemy_msg.covariance[28] = 2.0  # vy variance
-        enemy_msg.covariance[35] = 2.0  # vz variance
-
-        self.enemy_pub.publish(enemy_msg)
+        self.enemy_pose_pub.publish(pose_msg)
 
 def main():
     rclpy.init()

@@ -1,10 +1,11 @@
 import rclpy
 from rclpy.node import Node
-import numpy as np
-from halcon1_msgs.msg import EnemyPose, TrajectoryWithUncertainty
-from halcon1_prediction.kalman_filter import KalmanFilter
-from halcon1_prediction.monte_carlo import MonteCarloPredictor
-from std_msgs.msg import Header
+from geometry_msgs.msg import PoseStamped
+from nav_msgs.msg import Path
+from halcon1_prediction.predictor import Predictor
+from halcon1_prediction.utils.kalman_filter import KalmanFilterParameters
+from halcon1_prediction.utils.monte_carlo import MonteCarloParameters
+from halcon1_types import DronePose, TimestampedTrajectory
 
 class PredictionNode(Node):
     def __init__(self):
@@ -12,86 +13,54 @@ class PredictionNode(Node):
 
         # Publishers
         self.trajectory_pub = self.create_publisher(
-            TrajectoryWithUncertainty, '/enemy/predicted_trajectory', 10)
+            Path, '/enemy/trajectory_prediction', 10)
 
         # Subscribers
         self.enemy_sub = self.create_subscription(
-            EnemyPose, '/enemy/pose',
+            PoseStamped, '/enemy/pose',
             self.enemy_callback, 10)
 
         # Algorithms
-        self.kalman = KalmanFilter(dt=0.1)
-        self.monte_carlo = MonteCarloPredictor(num_samples=100)
-
-        # Timer for predictions at 5Hz
-        self.predict_timer = self.create_timer(0.2, self.publish_prediction)
-
-        # State
-        self.current_state = None
-        self.current_covariance = None
+        self.predictor = Predictor(kf_params = KalmanFilterParameters(),
+                                   mc_params = MonteCarloParameters())
 
     def enemy_callback(self, msg):
-        """Process enemy pose through Kalman filter"""
-        # Create measurement vector
-        measurement = np.array([
-            msg.x, msg.y, msg.z,
-            msg.vx, msg.vy, msg.vz
-        ])
-
-        # Create measurement covariance from message
-        cov_matrix = np.array(msg.covariance).reshape(6, 6)
-
-        # Predict step
-        self.kalman.predict()
-
-        # Update step
-        state, covariance = self.kalman.update(measurement, cov_matrix)
-
-        # Store for prediction
-        self.current_state = state
-        self.current_covariance = covariance
-
-    def publish_prediction(self):
-        """Generate and publish trajectory prediction"""
-        if self.current_state is None:
-            return
-
-        # Generate Monte Carlo predictions
-        predictions = self.monte_carlo.predict_trajectories(
-            self.current_state,
-            self.current_covariance,
-            time_horizon=5.0,
-            dt=0.5
+        """Process enemy pose and generate trajectory prediction"""
+        enemy_pose = DronePose(
+            x=msg.pose.position.x,
+            y=msg.pose.position.y,
+            z=msg.pose.position.z
         )
+        timestamp = msg.header.stamp.sec + msg.header.stamp.nanosec * 1e-9
+        trajectory_prediction = self.predictor.predict(enemy_pose, timestamp)
+        self.publish_prediction(trajectory_prediction, msg.header)
 
-        # Create message
-        msg = TrajectoryWithUncertainty()
-        msg.header = Header()
-        msg.header.stamp = self.get_clock().now().to_msg()
-        msg.header.frame_id = 'world_ned'
+    def publish_prediction(self, trajectory_prediction: TimestampedTrajectory, original_header):
+        """Convert trajectory prediction to NavPath and publish"""
+        path_msg = Path()
+        path_msg.header.stamp = original_header.stamp
+        path_msg.header.frame_id = 'world'
 
-        # Time points
-        msg.times = predictions['times'].tolist()
+        # Convert trajectory prediction array to PoseStamped messages
+        for timestamp, drone_pose in zip(trajectory_prediction.timestamps, trajectory_prediction.positions):
+            pose_stamped = PoseStamped()
+            pose_stamped.header.stamp.sec = int(timestamp)
+            pose_stamped.header.stamp.nanosec = int((timestamp - int(timestamp)) * 1e9)
+            pose_stamped.header.frame_id = 'world'
 
-        # Mean trajectory
-        msg.mean_x = predictions['mean'][:, 0].tolist()
-        msg.mean_y = predictions['mean'][:, 1].tolist()
-        msg.mean_z = predictions['mean'][:, 2].tolist()
+            pose_stamped.pose.position.x = drone_pose.x
+            pose_stamped.pose.position.y = drone_pose.y
+            pose_stamped.pose.position.z = drone_pose.z
 
-        # Upper bounds
-        msg.upper_x = predictions['upper'][:, 0].tolist()
-        msg.upper_y = predictions['upper'][:, 1].tolist()
-        msg.upper_z = predictions['upper'][:, 2].tolist()
+            # Identity quaternion for orientation
+            pose_stamped.pose.orientation.x = 0.0
+            pose_stamped.pose.orientation.y = 0.0
+            pose_stamped.pose.orientation.z = 0.0
+            pose_stamped.pose.orientation.w = 1.0
 
-        # Lower bounds
-        msg.lower_x = predictions['lower'][:, 0].tolist()
-        msg.lower_y = predictions['lower'][:, 1].tolist()
-        msg.lower_z = predictions['lower'][:, 2].tolist()
+            path_msg.poses.append(pose_stamped)
 
-        # Confidence level
-        msg.confidence_level = 0.95
-
-        self.trajectory_pub.publish(msg)
+        self.trajectory_pub.publish(path_msg)
 
 def main():
     rclpy.init()

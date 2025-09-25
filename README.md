@@ -232,6 +232,10 @@ ros2 topic pub /enemy/detection halcon1_msgs/Detection '{header: {stamp: {sec: 0
 ros2 topic echo /enemy/tracked --once
 ```
 
+If you are running the Gazebo simulation, you can also visualize in real time ros2 topics: with everything up and running, 
+call `ros2 run rviz2 rviz2`. This opens the `RViz` GUI. Select `add` button, then select the `by topic` tab. There you will 
+be able to see visualizable ros2 topics in real time (`/enemy/pose`, `/enemy/predicted_trajectory`, `/debug/interception_trajectory`).
+
 ## Troubleshooting
 
 ### PX4 Build Issues

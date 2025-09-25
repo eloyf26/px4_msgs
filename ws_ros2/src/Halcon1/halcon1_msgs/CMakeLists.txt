@@ -11,11 +11,6 @@ find_package(std_msgs REQUIRED)
 
 rosidl_generate_interfaces(${PROJECT_NAME}
   "msg/DroneDetection.msg"
-  "msg/TrackedObject.msg"
-  "msg/PredictedTrajectory.msg"
-  "msg/InterceptionCommand.msg"
-  "msg/EnemyPose.msg"
-  "msg/TrajectoryWithUncertainty.msg"
   DEPENDENCIES std_msgs
 )
 
