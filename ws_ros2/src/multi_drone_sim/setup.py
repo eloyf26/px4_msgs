@@ -25,6 +25,7 @@ setup(
     entry_points={
         'console_scripts': [
             'enemy_offboard_control = multi_drone_sim.enemy_offboard_control:main',
+            'px4_debug_translator = multi_drone_sim.px4_debug_translator:main',
         ],
     },
 )

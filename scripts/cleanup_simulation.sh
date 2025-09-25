@@ -48,7 +48,10 @@ kill_process "ruby.*gz"
 echo -e "${YELLOW}Stopping ROS2 nodes...${NC}"
 kill_process "ros2.*parameter_bridge"
 kill_process "rqt_image_view"
+kill_process "rviz2"
 kill_process "enemy_offboard_control"
+kill_process "px4_debug_translator"
+kill_process "ros_gz_bridge"
 
 echo -e "${YELLOW}Stopping terminal emulators spawned by script...${NC}"
 # Kill terminal windows with specific titles
@@ -57,7 +60,9 @@ kill_process "gnome-terminal.*Ally Drone"
 kill_process "gnome-terminal.*Enemy Drone"
 kill_process "gnome-terminal.*Camera Bridge"
 kill_process "gnome-terminal.*Camera Viewer"
+kill_process "gnome-terminal.*RViz2"
 kill_process "gnome-terminal.*Enemy Movement"
+kill_process "gnome-terminal.*PX4 Debug Translator"
 
 # Clean up any leftover shared memory or lock files
 echo -e "${YELLOW}Cleaning up temporary files...${NC}"
