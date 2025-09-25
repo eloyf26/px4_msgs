@@ -11,6 +11,8 @@ This repository contains all components needed to run the complete system, inclu
 
 ## Quick Start
 
+### Single Drone Simulation
+
 ```bash
 # Clone repository with submodules
 git clone --recursive https://github.com/eloyf26/halcon1-system.git
@@ -19,28 +21,96 @@ cd halcon1-system
 # Run setup (builds everything)
 ./setup.sh
 
-# Launch system (3 terminals)
+# Launch system (4 terminals)
 ./scripts/launch_px4_offboard.sh      # Terminal 1: PX4 SITL
-./scripts/launch_agent.sh    # Terminal 2: MicroXRCE Agent
-./scripts/launch_camera_bridge.sh # Terminal 3: Camera Bridge
-./scripts/launch_halcon1.sh  # Terminal 4: Halcon1 Pipeline
+./scripts/launch_agent.sh             # Terminal 2: MicroXRCE Agent
+./scripts/launch_camera_bridge.sh     # Terminal 3: Camera Bridge
+./scripts/launch_halcon1.sh           # Terminal 4: Halcon1 Pipeline
 ```
 
-If you want to visualize the images captured by the simulated mono-camera you can run:
+### Two-Drone Simulation (Ally vs Enemy)
 
+For simulating both ally and enemy drones:
+
+```bash
+# Launch all terminals automatically
+./scripts/launch_multi_terminal.sh
+```
+
+This launches **7-9 terminals/windows** in total:
+
+#### Essential Terminals (Required for Testing)
+1. **Ally Drone PX4** (Terminal 2) - Instance 0 with mono camera at position (0, 2, 0)
+   - Shows PX4 console output for ally drone
+   - Required for monitoring ally drone status
+
+2. **Enemy Drone PX4** (Terminal 3) - Instance 1 at position (0, -2, 0)
+   - Shows PX4 console output for enemy drone
+   - **ACTION REQUIRED**: Manually run `commander arm -f` then `commander takeoff`
+
+3. **Camera Bridge** (Terminal 4) - Bridges ally camera to ROS2 topics
+   - Converts Gazebo camera topics to ROS2 `/camera/image` and `/camera/camera_info`
+   - Required for visual pipeline
+
+4. **Enemy Movement Control** (Terminal 6) - Interactive enemy control
+   - Shows movement selection menu after enemy is armed/airborne
+   - Required to start enemy movement patterns
+
+5. **Gazebo Window** - 3D simulation environment
+   - Visual confirmation of drone positions and movements
+   - Can be minimized but shouldn't be closed
+
+#### Optional/Debug Terminals (Not Required for Basic Testing)
+6. **MicroXRCE Agents** (Terminal 1) - Two agents on ports 8888 (ally) and 8889 (enemy)
+   - Can be hidden - only shows connection logs
+   - Required running but doesn't need monitoring
+
+7. **PX4 Debug Translator** (Terminal 5) - Translates PX4 debug topics
+   - Optional - provides additional telemetry data
+   - Can be closed if not debugging PX4 internals
+
+8. **RViz Terminal** (Terminal 7, if launched) - Command terminal for RViz
+   - Optional - only needed if using RViz visualization
+   - Can be closed if not using RViz
+
+9. **RViz Window** (if launched) - ROS2 3D visualization tool
+   - Optional - for visualizing ROS2 topics like trajectories
+   - More detailed than Gazebo for ROS2 data
+
+#### Cleanup
+To stop all running processes and terminals:
+```bash
+./scripts/cleanup_simulation.sh
+```
+This script kills all PX4, Gazebo, MicroXRCE agents, and ROS2 nodes.
+
+### Visualization
+
+Monitor camera feed:
 ```bash
 ros2 run rqt_image_view rqt_image_view
 # Select /camera/image topic
 ```
 
-You can also visualize the feed of any of the available ros2 topics:
-
+Monitor ROS2 topics:
 ```bash
 ros2 topic echo /camera/camera_info --once
 ros2 topic echo /enemy/detection --once
 ros2 topic echo /enemy/tracked --once
 ros2 topic echo /enemy/predicted --once
 ros2 topic echo /interception/command --once
+
+# For multi-drone simulation
+ros2 topic list | grep "^/fmu"  # Ally drone topics (instance 0, no namespace)
+ros2 topic list | grep px4_1    # Enemy drone topics (instance 1, namespaced)
+
+# Example ally drone topics (no namespace):
+ros2 topic echo /fmu/out/vehicle_status_v1 --once
+ros2 topic echo /fmu/in/offboard_control_mode --once
+
+# Example enemy drone topics (namespaced):
+ros2 topic echo /px4_1/fmu/out/vehicle_status_v1 --once
+ros2 topic echo /px4_1/fmu/in/offboard_control_mode --once
 ```
 
 ## Repository Structure
@@ -62,11 +132,13 @@ halcon1-system/
 │       │   └── halcon1_bringup/  # Launch configurations
 │       ├── px4_msgs/           # PX4 message definitions
 │       ├── px4_ros_com/        # PX4-ROS2 bridge
-│       └── px4_offboard/       # PX4 offboard examples
+│       ├── px4_offboard/       # PX4 offboard examples
+│       └── multi_drone_sim/    # Multi-drone simulation package
 ├── scripts/                    # Launch scripts
 │   ├── launch_px4.sh          # Start PX4 SITL
 │   ├── launch_agent.sh        # Start MicroXRCE Agent
-│   └── launch_halcon1.sh     # Start Halcon1 pipeline
+│   ├── launch_halcon1.sh     # Start Halcon1 pipeline
+│   └── launch_multi_terminal.sh # Launch multi-drone simulation
 ├── setup.sh                   # One-click setup script
 └── README.md                  # This file
 ```
@@ -107,12 +179,13 @@ This will:
 
 ### Setup Requirements
 
-**QGroundControl (Required)**
+**QGroundControl (Required for single drone)**
 - Download from: https://qgroundcontrol.com/
 - Launch QGC before or after starting PX4
 - Acts as Ground Control Station (prevents "No connection to GCS" errors)
+- Not required for multi-drone simulation
 
-### Three-Terminal Setup
+### Single Drone Setup (4 Terminals)
 
 **Terminal 1: PX4 SITL**
 
@@ -132,7 +205,7 @@ This will:
 - Bridges PX4 and ROS2 communication
 - Runs on UDP port 8888
 
-**Termianl 3: Camera Bridge**
+**Terminal 3: Camera Bridge**
 
 ```bash
 ./scripts/launch_camera_bridge.sh
@@ -149,7 +222,44 @@ This will:
 ```
 - Starts processing nodes or offboard control
 
-### Monitor System (Terminal 5)
+### Multi-Drone Setup (Automated)
+
+```bash
+./scripts/launch_multi_terminal.sh
+```
+
+This script automatically:
+1. Cleans up existing PX4/Gazebo processes
+2. Launches two MicroXRCE agents (ports 8888, 8889)
+3. Starts ally drone with camera (instance 0)
+4. Starts enemy drone (instance 1)
+5. Sets up camera bridge for ally drone
+6. Opens enemy movement control terminal (press ENTER to start)
+
+#### Topic Namespace Behavior
+**Important Note**: PX4 uses different namespacing for each instance:
+- **Instance 0 (ally)**: No namespace prefix (e.g., `/fmu/in/offboard_control_mode`, `/fmu/out/vehicle_status_v1`)
+  - This maintains backward compatibility with single-drone code
+- **Instance 1 (enemy)**: All topics under `/px4_1/` namespace (e.g., `/px4_1/fmu/in/offboard_control_mode`)
+
+When writing ROS2 nodes:
+- For **ally drone (instance 0)**: Use topics without namespace like `/fmu/in/trajectory_setpoint`
+- For **enemy drone (instance 1)**: Use namespaced topics like `/px4_1/fmu/in/trajectory_setpoint`
+
+**IMPORTANT: Manual Enemy Drone Setup**
+After the enemy drone PX4 console appears (Terminal 3), you MUST manually run:
+```
+commander arm -f
+commander takeoff
+```
+This arms and launches the enemy drone. Only after these commands succeed, go to the Enemy Movement terminal (Terminal 6) where you'll see a menu:
+- Press `1` for circular movement
+- Press `2` for figure-8 movement
+- Press `3` for random movement
+- Enter duration in seconds (or press ENTER for infinite)
+- Any other key defaults to circular movement with infinite duration
+
+### Monitor System
 
 ```bash
 # Source workspace
