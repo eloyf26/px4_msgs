@@ -57,9 +57,18 @@ class EnemyOffboardControl(Node):
         # Movement parameters
         self.start_time = time.time()
         self.pattern_started = False
+        self.min_offboard_counter = 10 # The number is arbitrary. It's used to make sure the vehicle receives offboard control mode signals before changing to offboard mode.
         self.offboard_counter = 0
         self.current_altitude = -5.0  # Default altitude (will be updated from actual position)
         self.vehicle_local_position = None
+
+        # Offboard control mode message
+        self.offboard_control_mode_msg = OffboardControlMode()
+        self.offboard_control_mode_msg.position = True
+        self.offboard_control_mode_msg.velocity = False
+        self.offboard_control_mode_msg.acceleration = False
+        self.offboard_control_mode_msg.attitude = False
+        self.offboard_control_mode_msg.body_rate = False
 
         # Pattern-specific parameters
         self.circle_radius = 50.0  # meters
@@ -83,12 +92,7 @@ class EnemyOffboardControl(Node):
 
     def publish_offboard_control_mode(self):
         """Publish the offboard control mode."""
-        msg = OffboardControlMode()
-        msg.position = True
-        msg.velocity = False
-        msg.acceleration = False
-        msg.attitude = False
-        msg.body_rate = False
+        msg = self.offboard_control_mode_msg
         msg.timestamp = int(self.get_clock().now().nanoseconds / 1000)
         self.offboard_control_mode_publisher.publish(msg)
 
@@ -171,32 +175,29 @@ class EnemyOffboardControl(Node):
         self.publish_offboard_control_mode()
 
         # Send initial offboard commands
-        if self.offboard_counter < 10:
+        if self.offboard_counter < self.min_offboard_counter:
             self.offboard_counter += 1
-            if self.offboard_counter == 10:
+            if self.offboard_counter == self.min_offboard_counter:
                 self.engage_offboard_mode()
                 self.pattern_started = True
                 self.start_time = time.time()
                 self.get_logger().info("Starting movement pattern...")
 
         # Check if duration has expired
+        elapsed = time.time() - self.start_time
         if self.duration > 0:
-            elapsed = time.time() - self.start_time
             if elapsed >= self.duration:
                 self.land()
                 self.timer.cancel()
                 self.get_logger().info(f"Duration of {self.duration}s completed. Landing.")
                 return
 
-        # Calculate position based on pattern
-        t = time.time() - self.start_time
-
         if self.pattern == 'circle':
-            x, y, z = self.get_circle_position(t)
+            x, y, z = self.get_circle_position(elapsed)
         elif self.pattern == 'figure8':
-            x, y, z = self.get_figure8_position(t)
+            x, y, z = self.get_figure8_position(elapsed)
         elif self.pattern == 'random':
-            x, y, z = self.get_random_position(t)
+            x, y, z = self.get_random_position(elapsed)
         else:
             # Default: hover at current position
             return
