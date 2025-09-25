@@ -61,48 +61,62 @@ pkill -f MicroXRCEAgent
 pkill -f gz
 sleep 2
 
-# Terminal 1: MicroXRCE Agent
+# Terminal 1: MicroXRCE Agent (for both drones)
 echo -e "${BLUE}Starting Terminal 1: MicroXRCE Agent...${NC}"
 AGENT_CMD="echo -e '${GREEN}=== MicroXRCE Agent ===${NC}'; \
-echo 'Starting agent on UDP port 8888...'; \
-$MICRO_XRCE_AGENT udp4 -p 8888"
+echo 'Starting agent on UDP ports 8888 and 8889 for both drones...'; \
+$MICRO_XRCE_AGENT udp4 -p 8888 & \
+AGENT1_PID=\$!; \
+sleep 1; \
+$MICRO_XRCE_AGENT udp4 -p 8889 & \
+AGENT2_PID=\$!; \
+echo 'Both agents started. Press Ctrl+C to stop.'; \
+wait \$AGENT1_PID \$AGENT2_PID"
 open_terminal "MicroXRCE Agent" "$AGENT_CMD" "$GREEN"
 
 # Wait for agent to start
 sleep 3
 
-# Terminal 2: Ally Drone (Instance 1)
-echo -e "${BLUE}Starting Terminal 2: Ally Drone (Instance 1)...${NC}"
-ALLY_CMD="echo -e '${GREEN}=== Ally Drone (Instance 1) ===${NC}'; \
-echo 'Starting PX4 instance 1 with camera model...'; \
+# Terminal 2: Ally Drone (Instance 0)
+echo -e "${BLUE}Starting Terminal 2: Ally Drone (Instance 0)...${NC}"
+ALLY_CMD="echo -e '${GREEN}=== Ally Drone (Instance 0) ===${NC}'; \
+echo 'Starting PX4 instance 0 with camera model...'; \
 export LIBGL_ALWAYS_SOFTWARE=1; \
 cd $PX4_DIR && \
-PX4_SYS_AUTOSTART=4001 \
-PX4_GZ_MODEL_POSE='0,2,0,0,0,4.71' \
-PX4_SIM_MODEL=gz_x500_mono_cam \
-PX4_MAVLINK_GCS_PORT=14550 \
-./build/px4_sitl_default/bin/px4 -i 0"
-open_terminal "Ally Drone (Instance 1)" "$ALLY_CMD" "$BLUE"
+mkdir -p $PX4_DIR/build/px4_sitl_default/instance_0 && \
+cd $PX4_DIR/build/px4_sitl_default/instance_0 && \
+export PX4_SYS_AUTOSTART=4001; \
+export PX4_GZ_MODEL_POSE='0,2,0,0,0,4.71'; \
+export PX4_SIM_MODEL=gz_x500_mono_cam; \
+export PX4_INSTANCE=0; \
+export MAV_BROADCAST=1; \
+export PX4_MICRODDS_NS='px4_0'; \
+export UXRCE_DDS_UDP_PORT=8888; \
+$PX4_DIR/build/px4_sitl_default/bin/px4 -i 0"
+open_terminal "Ally Drone (Instance 0)" "$ALLY_CMD" "$BLUE"
 
 # Wait for Gazebo to start
 echo -e "${YELLOW}Waiting for Gazebo to initialize...${NC}"
-sleep 10
+sleep 15
 
-# Terminal 3: Enemy Drone (Instance 2)
-echo -e "${BLUE}Starting Terminal 3: Enemy Drone (Instance 2)...${NC}"
-ENEMY_CMD="echo -e '${RED}=== Enemy Drone (Instance 2) ===${NC}'; \
-echo 'Starting PX4 instance 2...'; \
+# Terminal 3: Enemy Drone (Instance 1)
+echo -e "${BLUE}Starting Terminal 3: Enemy Drone (Instance 1)...${NC}"
+ENEMY_CMD="echo -e '${RED}=== Enemy Drone (Instance 1) ===${NC}'; \
+echo 'Starting PX4 instance 1...'; \
 export LIBGL_ALWAYS_SOFTWARE=1; \
 cd $PX4_DIR && \
+mkdir -p $PX4_DIR/build/px4_sitl_default/instance_1 && \
+cd $PX4_DIR/build/px4_sitl_default/instance_1 && \
 PX4_GZ_WORLD=default \
 PX4_GZ_STANDALONE=1 \
 PX4_GZ_MODEL=x500_1 \
 PX4_SYS_AUTOSTART=4001 \
 PX4_GZ_MODEL_POSE='0,-2,0,0,0,0' \
 PX4_SIM_MODEL=gz_x500 \
-PX4_MAVLINK_GCS_PORT=14551 \
-./build/px4_sitl_default/bin/px4 -i 1"
-open_terminal "Enemy Drone (Instance 2)" "$ENEMY_CMD" "$RED"
+PX4_MICRODDS_NS='px4_1' \
+UXRCE_DDS_UDP_PORT=8889 \
+$PX4_DIR/build/px4_sitl_default/bin/px4 -i 1"
+open_terminal "Enemy Drone (Instance 1)" "$ENEMY_CMD" "$RED"
 
 # Wait for second drone to initialize
 sleep 5
@@ -122,15 +136,15 @@ ros2 run ros_gz_bridge parameter_bridge \
 -r /world/default/model/x500_mono_cam_0/link/camera_link/sensor/imager/camera_info:=/camera/camera_info"
 open_terminal "Camera Bridge" "$BRIDGE_CMD" "$YELLOW"
 
-# Terminal 5: Camera Viewer
-echo -e "${BLUE}Starting Terminal 5: Camera Viewer...${NC}"
-VIEWER_CMD="echo -e '${GREEN}=== Camera Viewer ===${NC}'; \
-echo 'Starting RQT Image View...'; \
-source /opt/ros/humble/setup.bash; \
-source $WS_ROS2/install/setup.bash; \
-export LIBGL_ALWAYS_SOFTWARE=1; \
-ros2 run rqt_image_view rqt_image_view"
-open_terminal "Camera Viewer" "$VIEWER_CMD" "$GREEN"
+# # Terminal 5: Camera Viewer
+# echo -e "${BLUE}Starting Terminal 5: Camera Viewer...${NC}"
+# VIEWER_CMD="echo -e '${GREEN}=== Camera Viewer ===${NC}'; \
+# echo 'Starting RQT Image View...'; \
+# source /opt/ros/humble/setup.bash; \
+# source $WS_ROS2/install/setup.bash; \
+# export LIBGL_ALWAYS_SOFTWARE=1; \
+# ros2 run rqt_image_view rqt_image_view"
+# open_terminal "Camera Viewer" "$VIEWER_CMD" "$GREEN"
 
 # Terminal 6: Enemy Movement Control (waits for user)
 echo -e "${BLUE}Starting Terminal 6: Enemy Movement Control...${NC}"
@@ -148,13 +162,10 @@ open_terminal "Enemy Movement Control" "$ENEMY_CONTROL_CMD" "$RED"
 
 echo -e "${GREEN}=== All terminals launched ===${NC}"
 echo -e "${YELLOW}Terminal Summary:${NC}"
-echo -e "  1. ${GREEN}MicroXRCE Agent${NC} - UDP port 8888"
-echo -e "  2. ${BLUE}Ally Drone${NC} - Instance 1 with camera"
-echo -e "  3. ${RED}Enemy Drone${NC} - Instance 2"
+echo -e "  1. ${GREEN}MicroXRCE Agent${NC} - UDP ports 8888 (drone 0) and 8889 (drone 1)"
+echo -e "  2. ${BLUE}Ally Drone${NC} - Instance 0 with camera"
+echo -e "  3. ${RED}Enemy Drone${NC} - Instance 1"
 echo -e "  4. ${YELLOW}Camera Bridge${NC} - ROS2 topic bridge"
 echo -e "  5. ${GREEN}Camera Viewer${NC} - RQT Image View"
 echo -e "  6. ${RED}Enemy Movement${NC} - Press ENTER in that terminal to start"
 echo ""
-echo -e "${GREEN}QGroundControl connections:${NC}"
-echo -e "  - Ally drone: UDP port 14550"
-echo -e "  - Enemy drone: UDP port 14551"
