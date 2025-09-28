@@ -1,4 +1,6 @@
 from setuptools import setup
+import os
+from glob import glob
 
 package_name = 'halcon1_detection'
 
@@ -23,4 +25,12 @@ setup(
             'detection_node = halcon1_detection.detection_node:main',
         ],
     },
+    package_data={
+        package_name: [
+            'models/*.pt',
+            'models/*.pth',
+            'models/README.md',
+        ],
+    },
+    include_package_data=True,
 )

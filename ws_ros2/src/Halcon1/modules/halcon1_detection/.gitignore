@@ -1,0 +1,10 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+
+# Cache files
+*.cache
+
+# Keep only final models in models/
+# The training scripts are in training/ folder
