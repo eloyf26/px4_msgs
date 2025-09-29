@@ -129,7 +129,7 @@ colcon build --packages-select halcon1_msgs
 colcon build --packages-select halcon1_types
 colcon build --packages-select px4_msgs px4_ros_com
 colcon build --packages-select multi_drone_sim
-colcon build --packages-select halcon1_detection halcon1_tracking halcon1_prediction halcon1_interception
+colcon build --packages-select halcon1_detection halcon1_tracking halcon1_guidance
 colcon build --packages-select halcon1_bringup px4_offboard
 
 cd "$SCRIPT_DIR"
@@ -156,10 +156,9 @@ echo ""
 echo "📊 Available ROS2 Topics:"
 echo "  /camera/image       - Camera images (sensor_msgs/Image)"
 echo "  /camera/camera_info - Camera calibration info"
-echo "  /enemy/detection    - Target detections @ 10Hz"
-echo "  /enemy/tracked      - Target tracking @ 10Hz"
-echo "  /enemy/predicted    - Trajectory predictions @ 10Hz"
-echo "  /interception/command - Interception commands @ 10Hz"
+echo "  /enemy/detection    - Target detections"
+echo "  /enemy/tracked      - Target tracking"
+echo "  /interception/command - Interception commands"
 echo ""
 echo "Source ROS2 workspace in new terminals:"
 echo "  source $SCRIPT_DIR/ws_ros2/install/setup.bash"

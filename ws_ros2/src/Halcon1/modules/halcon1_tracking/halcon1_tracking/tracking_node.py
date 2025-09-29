@@ -3,7 +3,7 @@ from rclpy.node import Node
 from rclpy.qos import QoSProfile, ReliabilityPolicy, DurabilityPolicy, HistoryPolicy
 from halcon1_msgs.msg import DroneDetection
 from geometry_msgs.msg import PoseStamped
-from px4_msgs.msg import VehicleLocalPosition, VehicleOdometry
+from px4_msgs.msg import VehicleOdometry
 from halcon1_tracking.coordinate_transform import CoordinateTransform
 from halcon1_types import DronePose
 

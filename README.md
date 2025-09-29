@@ -4,8 +4,8 @@ Complete autonomous drone interception system with PX4 SITL integration and ROS2
 
 ## Overview
 
-Halcon1 implements a four-stage pipeline for autonomous drone interception:
-**Detection → Tracking → Prediction → Interception**
+Halcon1 implements a three-stage pipeline for autonomous drone interception:
+**Detection → Tracking → Guidance**
 
 This repository contains all components needed to run the complete system, including simulation, communication bridges, and the processing pipeline.
 
@@ -97,7 +97,6 @@ Monitor ROS2 topics:
 ros2 topic echo /camera/camera_info --once
 ros2 topic echo /enemy/detection --once
 ros2 topic echo /enemy/tracked --once
-ros2 topic echo /enemy/predicted --once
 ros2 topic echo /interception/command --once
 
 # For multi-drone simulation
@@ -127,8 +126,7 @@ halcon1-system/
 │       │   ├── modules/        # Processing modules
 │       │   │   ├── halcon1_detection/
 │       │   │   ├── halcon1_tracking/
-│       │   │   ├── halcon1_prediction/
-│       │   │   └── halcon1_interception/
+│       │   │   ├── halcon1_guidance/
 │       │   └── halcon1_bringup/  # Launch configurations
 │       ├── px4_msgs/           # PX4 message definitions
 │       ├── px4_ros_com/        # PX4-ROS2 bridge
@@ -284,34 +282,24 @@ ros2 run rqt_image_view rqt_image_view # Select /camera/image topic
 
 ### Detection Module (`halcon1_detection`)
 - **Current**: Fabricates moving target detections
-- **Output**: 2D pixel coordinates @ 10Hz
-- **Future**: YOLO-based visual detection
+- **Output**: 2D pixel coordinates
 
 ### Tracking Module (`halcon1_tracking`)
 - **Current**: Simple 2D→3D conversion
-- **Output**: 3D position + velocity @ 10Hz
-- **Future**: Kalman filter with camera calibration
+- **Output**: 3D position + velocity
 
-### Prediction Module (`halcon1_prediction`)
-- **Current**: Linear trajectory extrapolation
-- **Output**: Future positions @ 10Hz
-- **Future**: Monte Carlo uncertainty propagation
-
-### Interception Module (`halcon1_interception`)
-- **Current**: Direct path to predicted position
-- **Output**: Target coordinates @ 10Hz
-- **Future**: Optimized trajectory planning
+### Prediction Module (`halcon1_guidance`)
+- **Current**: Generates instantaneous target acceleration for PX4
+- **Output**: Trajectory Setpoint (acceleration) at 50 Hz
 
 ## Data Flow
 
 ```
-Camera (simulated) → /enemy/detection (x,y pixels @ 10Hz)
+Camera (simulated) → /enemy/detection (x,y pixels)
                   ↓
-                  → /enemy/tracked (x,y,z meters @ 10Hz)
+                  → /enemy/tracked (x,y,z meters)
                   ↓
-                  → /enemy/predicted (trajectory @ 10Hz)
-                  ↓
-                  → /interception/command (target @ 10Hz)
+                  → /interception/command (target)
 ```
 
 ## Development

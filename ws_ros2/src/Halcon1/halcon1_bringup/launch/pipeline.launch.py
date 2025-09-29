@@ -22,18 +22,9 @@ def generate_launch_description():
             }]
         ),
         Node(
-            package='halcon1_prediction',
-            executable='prediction_node',
-            name='prediction_node',
-            output='screen',
-            parameters=[{
-                'use_sim_time': False  # Set to False for now, True only with Gazebo running
-            }]
-        ),
-        Node(
-            package='halcon1_interception',
-            executable='interception_node',
-            name='interception_node',
+            package='halcon1_guidance',
+            executable='guidance_node',
+            name='guidance_node',
             output='screen',
             parameters=[{
                 'use_sim_time': False  # Set to False for now, True only with Gazebo running

@@ -8,8 +8,7 @@
 
   <exec_depend>halcon1_detection</exec_depend>
   <exec_depend>halcon1_tracking</exec_depend>
-  <exec_depend>halcon1_prediction</exec_depend>
-  <exec_depend>halcon1_interception</exec_depend>
+  <exec_depend>halcon1_guidance</exec_depend>
 
   <test_depend>ament_copyright</test_depend>
   <test_depend>ament_flake8</test_depend>

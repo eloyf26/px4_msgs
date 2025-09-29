@@ -1,6 +1,6 @@
 from setuptools import setup, find_packages
 
-package_name = 'halcon1_prediction'
+package_name = 'halcon1_guidance'
 
 setup(
     name=package_name,
@@ -20,7 +20,7 @@ setup(
     tests_require=['pytest'],
     entry_points={
         'console_scripts': [
-            'prediction_node = halcon1_prediction.prediction_node:main',
+            'guidance_node = halcon1_guidance.guidance_node:main',
         ],
     },
 )
