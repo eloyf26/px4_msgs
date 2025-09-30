@@ -3,9 +3,15 @@ from rclpy.node import Node
 from rclpy.qos import QoSProfile, ReliabilityPolicy, DurabilityPolicy, HistoryPolicy
 from halcon1_msgs.msg import DroneDetection
 from geometry_msgs.msg import PoseStamped
+<<<<<<< HEAD
 from px4_msgs.msg import VehicleOdometry
 from halcon1_tracking.coordinate_transform import CoordinateTransform
+=======
+from px4_msgs.msg import VehicleLocalPosition, VehicleOdometry
+from halcon1_tracking.coordinate_transform import CoordinateTransform, CameraIntrinsics
+>>>>>>> 6719f88 (feat: refactor tracking node)
 from halcon1_types import DronePose
+from sensor_msgs.msg import CameraInfo
 
 class TrackingNode(Node):
     def __init__(self):
@@ -29,9 +35,14 @@ class TrackingNode(Node):
         self.friendly_sub = self.create_subscription(
             VehicleOdometry, '/fmu/out/vehicle_odometry',
             self.friendly_callback, qos_profile)
+        self.camera_info_sub = self.create_subscription(
+            CameraInfo, '/camera/info',
+            self.camera_info_callback, 10)
 
         # Coordinate transform
-        self.transform = CoordinateTransform()
+        self.last_intrinsic_update = None
+        # TODO: Enemy drone width / height should be a ros2 parameter
+        self.transform = CoordinateTransform(enemy_drone_width=0.5, enemy_drone_height=0.2)
 
         # State
         self.friendly_pose = None
@@ -50,11 +61,26 @@ class TrackingNode(Node):
         # Store orientation quaternion
         self.friendly_orientation = msg.q
 
+    def camera_info_callback(self, msg):
+        """Update the camera intrinsic parameters from CameraInfo message"""
+        # We don't want to update intrinsics every time because they should be constant. We will only do it every 5 seconds
+        if self.last_intrinsic_update is not None:
+            if (self.get_clock().now() - self.last_intrinsic_update).nanoseconds < 5e9:
+                return  # 5 seconds
+        self.last_intrinsic_update = self.get_clock().now()
+
+        camera_intrinsics = self._parse_camera_intrinsics(msg)
+        self.transform.update_camera_intrinsics(camera_intrinsics)
+
     def detection_callback(self, msg):
         """Process enemy detection and transform to world coordinates"""
         # Need friendly pose and orientation for coordinate transformation
-        if self.friendly_pose is None or self.friendly_orientation is None:
-            self.get_logger().info('No friendly pose/orientation available for coordinate transformation')
+        if self.friendly_pose is None:
+            self.get_logger().info('No friendly pose/orientation available, skipping detection processing')
+            return
+
+        if self.last_intrinsic_update is None:
+            self.get_logger().info('No camera intrinsics available, skipping detection processing')
             return
 
         # Log detection values for debugging
@@ -67,12 +93,10 @@ class TrackingNode(Node):
             self.get_logger().error('Skipping coordinate transformation due to invalid detection')
             return
 
-        try:
-            # Use the coordinate transform to convert to world coordinates
-            enemy_world_pose = self.transform.camera_to_world_coordinates(
-                msg, self.friendly_pose, self.friendly_orientation)
-        except ValueError as e:
-            self.get_logger().error(f'Coordinate transformation failed: {e}')
+        enemy_world_pose = self.transform.camera_to_world_coordinates(msg, self.friendly_pose, self.friendly_orientation)
+
+        if not enemy_world_pose:
+            self.get_logger().error('Coordinate transformation failed, skipping publishing')
             return
 
         # Create and publish PoseStamped message
@@ -92,6 +116,27 @@ class TrackingNode(Node):
         pose_msg.pose.orientation.w = 1.0
 
         self.enemy_pose_pub.publish(pose_msg)
+
+    def _parse_camera_intrinsics(self, camera_info) -> CameraIntrinsics:
+        """Extract camera intrinsic parameters from CameraInfo message"""
+        # Check that there is no distortion
+        if camera_info.distortion_model != 'plumb_bob':
+            self.get_logger().error(f'Unsupported distortion model: {camera_info.distortion_model}')
+            return None
+
+        k = camera_info.k  # length-9 list
+        if len(k) != 9:
+            self.get_logger().error('Invalid camera intrinsic matrix size')
+            return None
+
+        return CameraIntrinsics(
+            fx=k[0],
+            fy=k[4],
+            cx=k[2],
+            cy=k[5],
+            width=camera_info.width,
+            height=camera_info.height
+        )
 
 def main():
     rclpy.init()
