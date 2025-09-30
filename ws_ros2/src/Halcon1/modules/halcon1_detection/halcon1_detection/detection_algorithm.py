@@ -2,16 +2,16 @@ from halcon1_types import DetectionResult
 from ultralytics import YOLO
 import cv2
 import numpy as np
-import os
+import yaml
 from pathlib import Path
+
 
 class DetectionAlgorithm:
     def __init__(self):
-        self.camera_width = 640
-        self.camera_height = 480
+        # Load configuration from YAML file
+        self._load_config()
 
-        # Models must be installed via colcon build
-        # They will be in the package directory after installation
+        # Get models directory from package
         try:
             import halcon1_detection
             package_dir = Path(halcon1_detection.__file__).parent
@@ -24,55 +24,50 @@ class DetectionAlgorithm:
         # Ensure models directory exists
         self.models_dir.mkdir(parents=True, exist_ok=True)
 
-        # Model selection priority - use the best available model
-        model_preferences = [
-            #'yolo11n_fast_accurate.pt',   # Optimized training version
-            'yolo11n.pt'                  # Base model fallback
-        ]
+        # Select and load model based on configuration
+        self._load_model()
 
-        # Find the best available model
-        self.model_path = None
-        self.model_name = None
+        print(f"Detection algorithm initialized with {self.model_config['name']}")
 
-        for model_name in model_preferences:
-            potential_path = self.models_dir / model_name
-            if potential_path.exists():
-                self.model_path = potential_path
-                self.model_name = model_name
-                print(f"Using model: {model_name} from {self.models_dir}")
-                break
+    def _load_config(self):
+        """Load configuration from YAML file."""
+        try:
+            import halcon1_detection
+            package_dir = Path(halcon1_detection.__file__).parent
+            config_path = package_dir / 'config.yaml'
+        except ImportError:
+            # Fallback if package not properly installed
+            config_path = Path(__file__).parent / 'config.yaml'
 
-        # If no model found, use base model (will download if needed)
-        if self.model_path is None:
-            self.model_name = 'yolo11n.pt'
-            self.model_path = self.models_dir / self.model_name
-            print(f"No trained model found. Will download base model: {self.model_name}")
+        with open(config_path, 'r') as f:
+            self.config = yaml.safe_load(f)
+
+    def _load_model(self):
+        """Load the configured model."""
+        # Get the selected model configuration
+        selected_model = self.config['selected_model']
+        self.model_config = self.config['models'][selected_model]
+        self.model_path = self.models_dir / self.model_config['name']
+
+        print(f"Configured to use model: {self.model_config['name']}")
 
         # Load the YOLO model
         if self.model_path.exists():
             print(f"Loading model from: {self.model_path}")
             self.model = YOLO(str(self.model_path))
         else:
-            print(f"Downloading {self.model_name}...")
-            self.model = YOLO(self.model_name)
+            print(f"Downloading {self.model_config['name']}...")
+            self.model = YOLO(self.model_config['name'])
             # Save to models directory for future use
-            if Path(self.model_name).exists():
+            if Path(self.model_config['name']).exists():
                 import shutil
-                shutil.move(self.model_name, str(self.model_path))
+                shutil.move(self.model_config['name'], str(self.model_path))
                 print(f"Model saved to: {self.model_path}")
 
-        # Detection parameters
-        self.confidence_threshold = 0.25
-        self.nms_threshold = 0.45
-
-        # For drone-specific models, only detect drones (class 0)
-        # For base model, detect all objects
-        if 'drone' in self.model_name:
-            self.target_classes = [0]  # Drone class only
-        else:
-            self.target_classes = None  # All classes
-
-        print(f"Detection algorithm initialized with {self.model_name}")
+        # Set detection parameters from config
+        self.confidence_threshold = self.model_config['confidence_threshold']
+        self.nms_threshold = self.model_config['nms_threshold']
+        self.target_classes = self.model_config['target_classes']
 
     def detect(self, image: np.ndarray) -> tuple[DetectionResult, np.ndarray]:
         """
@@ -97,7 +92,7 @@ class DetectionAlgorithm:
             boxes = results[0].boxes
 
             # Find best detection (highest confidence)
-            best_idx = 0
+            best_idx = -1
             best_conf = 0
 
             for i, box in enumerate(boxes):
@@ -124,19 +119,22 @@ class DetectionAlgorithm:
                     if class_id not in self.target_classes:
                         continue
 
-                # Class name
-                if 'drone' in self.model_name:
+                # Get class name
+                if self.target_classes == [0]:  # Drone-specific model
                     class_name = 'drone'
                 else:
                     class_name = self.model.names[class_id]
 
-                # Color coding
+                # Get visualization settings
+                viz = self.config['visualization']
+
+                # Color and thickness based on whether it's primary detection
                 if i == best_idx:
-                    color = (0, 255, 0)  # Green for primary detection
-                    thickness = 3
+                    color = tuple(viz['colors']['primary'])
+                    thickness = viz['thickness']['primary']
                 else:
-                    color = (255, 255, 0)  # Cyan for secondary
-                    thickness = 2
+                    color = tuple(viz['colors']['secondary'])
+                    thickness = viz['thickness']['secondary']
 
                 # Draw bounding box
                 cv2.rectangle(annotated_image,
@@ -146,7 +144,11 @@ class DetectionAlgorithm:
 
                 # Draw label
                 label = f'{class_name}: {conf:.2f}'
-                label_size, _ = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, 0.5, 2)
+                font_type = viz['font']['type']
+                font_scale = viz['font']['scale']
+                text_thickness = viz['thickness']['text']
+
+                label_size, _ = cv2.getTextSize(label, font_type, font_scale, text_thickness)
 
                 # Label background
                 cv2.rectangle(annotated_image,
@@ -157,11 +159,13 @@ class DetectionAlgorithm:
                 # Label text
                 cv2.putText(annotated_image, label,
                           (int(x1), int(y1) - 2),
-                          cv2.FONT_HERSHEY_SIMPLEX,
-                          0.5, (0, 0, 0), 2)
+                          font_type,
+                          font_scale,
+                          tuple(viz['colors']['text']),
+                          text_thickness)
 
             # Use best detection for result
-            if best_conf > 0:
+            if best_idx >= 0:
                 best_box = boxes[best_idx]
                 x1, y1, x2, y2 = best_box.xyxy[0].tolist()
 
@@ -173,12 +177,18 @@ class DetectionAlgorithm:
                 )
 
         # Add info overlay
-        model_info = self.model_name.replace('.pt', '')
-        num_detections = len(results[0].boxes) if results[0].boxes is not None else 0
+        viz = self.config['visualization']
+        model_info = self.model_config['name'].replace('.pt', '')
+        num_detections = len([box for box in results[0].boxes
+                             if self.target_classes is None or
+                             int(box.cls[0].item()) in self.target_classes]) if results[0].boxes is not None else 0
         info_text = f"Model: {model_info} | Detections: {num_detections}"
 
         cv2.putText(annotated_image, info_text,
-                   (10, 30), cv2.FONT_HERSHEY_SIMPLEX,
-                   0.7, (0, 255, 255), 2)
+                   (10, 30),
+                   viz['font']['type'],
+                   viz['font']['info_scale'],
+                   tuple(viz['colors']['info']),
+                   viz['thickness']['text'])
 
         return detection_result, annotated_image

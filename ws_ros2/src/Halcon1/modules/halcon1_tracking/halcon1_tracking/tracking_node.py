@@ -35,31 +35,45 @@ class TrackingNode(Node):
 
         # State
         self.friendly_pose = None
+        self.friendly_orientation = None
 
         self.get_logger().info('Tracking node initialized - waiting for detections and friendly pose...')
 
     def friendly_callback(self, msg):
         """Update friendly drone pose from PX4 odometry (includes orientation)"""
-        # Store full pose with position and orientation
+        # Store position
         self.friendly_pose = DronePose(
             x=msg.position[0],
             y=msg.position[1],
             z=msg.position[2]
         )
-        # Note: VehicleOdometry also contains quaternion in msg.q for future use
+        # Store orientation quaternion
+        self.friendly_orientation = msg.q
 
     def detection_callback(self, msg):
         """Process enemy detection and transform to world coordinates"""
-        # Need friendly pose to do coordinatrie transformation
-        if self.friendly_pose is None:
-            self.get_logger().info('No friendly pose available for coordinate transformation')
+        # Need friendly pose and orientation for coordinate transformation
+        if self.friendly_pose is None or self.friendly_orientation is None:
+            self.get_logger().info('No friendly pose/orientation available for coordinate transformation')
             return
 
-        # Create a DroneDetection-like object to pass to coordinate transform
-        # (We need to import/create the DetectionResult type, but for now using the message directly)
+        # Log detection values for debugging
+        self.get_logger().info(f'Detection received: x={msg.x}, y={msg.y}, width={msg.width}, height={msg.height}')
 
-        # Use the coordinate transform to convert to world coordinates
-        enemy_world_pose = self.transform.camera_to_world_coordinates(msg, self.friendly_pose)
+        # Validate detection data
+        if msg.width <= 0 or msg.height <= 0:
+            self.get_logger().error(f'Invalid detection dimensions: width={msg.width}, height={msg.height}. '
+                                   f'Full detection: x={msg.x}, y={msg.y}, width={msg.width}, height={msg.height}')
+            self.get_logger().error('Skipping coordinate transformation due to invalid detection')
+            return
+
+        try:
+            # Use the coordinate transform to convert to world coordinates
+            enemy_world_pose = self.transform.camera_to_world_coordinates(
+                msg, self.friendly_pose, self.friendly_orientation)
+        except ValueError as e:
+            self.get_logger().error(f'Coordinate transformation failed: {e}')
+            return
 
         # Create and publish PoseStamped message
         pose_msg = PoseStamped()

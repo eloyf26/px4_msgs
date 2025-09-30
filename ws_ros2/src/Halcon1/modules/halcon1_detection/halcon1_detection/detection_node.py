@@ -55,21 +55,32 @@ class DetectionNode(Node):
             self.detection_count += 1
             self.get_logger().debug(
                 f'Detection #{self.detection_count}: '
-                f'bbox=({detection_result.x}, {detection_result.y}, '
+                f'Processing space bbox=({detection_result.x}, {detection_result.y}, '
                 f'{detection_result.width}, {detection_result.height})'
             )
 
-        # Create DroneDetection message
-        detection_msg = DroneDetection()
-        detection_msg.header.stamp = self.get_clock().now().to_msg()
-        detection_msg.header.frame_id = 'camera'
-        detection_msg.x = float(detection_result.x)
-        detection_msg.y = float(detection_result.y)
-        detection_msg.width = float(detection_result.width)
-        detection_msg.height = float(detection_result.height)
+            # Create DroneDetection message ONLY for valid detections
+            # NOTE: YOLO returns coordinates in original image space (1280x960)
+            # No scaling needed - coordinates already match camera resolution!
+            detection_msg = DroneDetection()
+            detection_msg.header.stamp = self.get_clock().now().to_msg()
+            detection_msg.header.frame_id = 'camera'
+            detection_msg.x = float(detection_result.x)
+            detection_msg.y = float(detection_result.y)
+            detection_msg.width = float(detection_result.width)
+            detection_msg.height = float(detection_result.height)
 
-        # Publish detection
-        self.detection_pub.publish(detection_msg)
+            # Log coordinates for debugging
+            self.get_logger().debug(
+                f'Camera space bbox: ({detection_msg.x:.1f}, {detection_msg.y:.1f}, '
+                f'{detection_msg.width:.1f}, {detection_msg.height:.1f})'
+            )
+
+            # Publish detection
+            self.detection_pub.publish(detection_msg)
+        else:
+            # No valid detection - log this for debugging
+            self.get_logger().debug(f'No detection in frame {self.frame_count}')
 
         # Convert annotated image back to ROS message and publish
         try:

@@ -23,4 +23,10 @@ setup(
             'tracking_node = halcon1_tracking.tracking_node:main',
         ],
     },
+    package_data={
+        package_name: [
+            'config.yaml',
+        ],
+    },
+    include_package_data=True,
 )

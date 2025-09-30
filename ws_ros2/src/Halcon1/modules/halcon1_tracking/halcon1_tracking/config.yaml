@@ -1,0 +1,22 @@
+# Tracking Configuration
+
+# Camera intrinsics calculation:
+# From SDF: Resolution = 1280x960, H_FOV = 1.74 rad
+# fx = (image_width / 2) / tan(H_FOV / 2)
+# fx = (1280 / 2) / tan(1.74 / 2) = 640 / tan(0.87) = 640 / 0.975 = 656.5
+# fy = fx (square pixels assumption)
+# cx = image_width / 2 = 1280 / 2 = 640
+# cy = image_height / 2 = 960 / 2 = 480
+camera_intrinsics:
+  fx: 656.5
+  fy: 656.5
+  cx: 640.0
+  cy: 480.0
+
+camera_mount:
+  x: 0.22
+  y: 0.0
+  z: 0.28
+
+drone:
+  enemy_width: 0.5

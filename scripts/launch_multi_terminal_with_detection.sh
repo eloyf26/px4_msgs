@@ -103,6 +103,7 @@ pkill -f px4
 pkill -f MicroXRCEAgent
 pkill -f gz
 pkill -f detection_node
+pkill -f tracking_node
 sleep 2
 
 # Terminal 1: MicroXRCE Agent (for all drones)
@@ -178,8 +179,24 @@ echo -e '${GREEN}Detection node starting...${NC}'; \
 ros2 run halcon1_detection detection_node"
 open_terminal "Detection Node" "$DETECTION_CMD" "$CYAN"
 
-# Terminal 6: RViz2 Visualization
-echo -e "${BLUE}Starting Terminal 6: RViz2 Visualization...${NC}"
+# Terminal 6: Tracking Node (NEW)
+echo -e "${MAGENTA}Starting Terminal 6: Tracking Node...${NC}"
+TRACKING_CMD="echo -e '${MAGENTA}=== Tracking Node ===${NC}'; \
+echo -e '${YELLOW}Starting coordinate transformation for world tracking...${NC}'; \
+echo ''; \
+echo 'Tracking inputs/outputs:'; \
+echo '  - Subscribes to: /enemy/detection (from Detection Node)'; \
+echo '  - Subscribes to: /fmu/out/vehicle_odometry (friendly drone pose)'; \
+echo '  - Publishes to: /enemy/pose (world coordinates)'; \
+echo ''; \
+source $ROS_SETUP; \
+source $WS_SETUP; \
+echo -e '${GREEN}Tracking node starting...${NC}'; \
+ros2 run halcon1_tracking tracking_node"
+open_terminal "Tracking Node" "$TRACKING_CMD" "$MAGENTA"
+
+# Terminal 7: RViz2 Visualization
+echo -e "${BLUE}Starting Terminal 7: RViz2 Visualization...${NC}"
 RVIZ_CMD="echo -e '${GREEN}=== RViz2 Visualization ===${NC}'; \
 echo 'Starting RViz2 for trajectory and detection visualization...'; \
 echo ''; \
@@ -187,13 +204,17 @@ echo -e '${CYAN}To view detection results:${NC}'; \
 echo '  1. Add Image display'; \
 echo '  2. Set topic to /debug/ally/detection_image'; \
 echo ''; \
+echo -e '${CYAN}To view enemy tracking:${NC}'; \
+echo '  1. Add Pose display'; \
+echo '  2. Set topic to /enemy/pose'; \
+echo ''; \
 source $ROS_SETUP; \
 source $WS_SETUP; \
 ros2 run rviz2 rviz2"
 open_terminal "RViz2" "$RVIZ_CMD" "$GREEN"
 
-# Terminal 7: Enemy Movement Control (waits for user)
-echo -e "${BLUE}Starting Terminal 7: Enemy Movement Control...${NC}"
+# Terminal 8: Enemy Movement Control (waits for user)
+echo -e "${BLUE}Starting Terminal 8: Enemy Movement Control...${NC}"
 ENEMY_CONTROL_CMD="echo -e '${RED}=== Enemy Movement Control ===${NC}'; \
 echo -e '${YELLOW}Ready to start enemy offboard control.${NC}'; \
 echo -e '${GREEN}Press ENTER when ready to launch enemy movement...${NC}'; \
@@ -205,9 +226,9 @@ cd $WS_ROS2; \
 ros2 run multi_drone_sim enemy_offboard_control"
 open_terminal "Enemy Movement Control" "$ENEMY_CONTROL_CMD" "$RED"
 
-# Terminal 8 (if debug mode): PX4 Debug Translator
+# Terminal 9 (if debug mode): PX4 Debug Translator
 if [ "$DEBUG_MODE" = true ]; then
-    echo -e "${BLUE}Starting Terminal 8: PX4 Debug Translator...${NC}"
+    echo -e "${BLUE}Starting Terminal 9: PX4 Debug Translator...${NC}"
     DEBUG_CMD="echo -e '${MAGENTA}=== PX4 Debug Translator ===${NC}'; \
     echo 'Translating PX4 topics to ROS2 standard types for visualization...'; \
     echo ''; \
@@ -232,10 +253,11 @@ echo -e "  2. ${BLUE}Ally Drone${NC} - Instance 0 with camera"
 echo -e "  3. ${RED}Enemy Drone${NC} - Instance 1"
 echo -e "  4. ${YELLOW}Camera Bridge${NC} - ROS2 topic bridge"
 echo -e "  5. ${CYAN}Detection Node${NC} - YOLOv11n drone detection"
-echo -e "  6. ${GREEN}RViz2${NC} - 3D visualization of trajectories and detections"
-echo -e "  7. ${RED}Enemy Movement${NC} - Press ENTER in that terminal to start"
+echo -e "  6. ${MAGENTA}Tracking Node${NC} - Coordinate transformation to world frame"
+echo -e "  7. ${GREEN}RViz2${NC} - 3D visualization of trajectories and detections"
+echo -e "  8. ${RED}Enemy Movement${NC} - Press ENTER in that terminal to start"
 if [ "$DEBUG_MODE" = true ]; then
-    echo -e "  8. ${MAGENTA}PX4 Debug Translator${NC} - Converting PX4 to ROS2 visualization topics"
+    echo -e "  9. ${MAGENTA}PX4 Debug Translator${NC} - Converting PX4 to ROS2 visualization topics"
 fi
 echo ""
 echo -e "${CYAN}Detection Node Info:${NC}"
@@ -244,12 +266,22 @@ echo -e "  - Publishes detections to: /enemy/detection"
 echo -e "  - Publishes annotated images to: /debug/ally/detection_image"
 echo -e "  - Model: YOLOv11n (will download on first run)"
 echo ""
+echo -e "${MAGENTA}Tracking Node Info:${NC}"
+echo -e "  - Subscribes to: /enemy/detection (bounding boxes)"
+echo -e "  - Subscribes to: /fmu/out/vehicle_odometry (friendly pose)"
+echo -e "  - Publishes to: /enemy/pose (world coordinates)"
+echo ""
 echo -e "${YELLOW}Usage:${NC}"
 echo -e "  Normal mode: ./launch_multi_terminal_with_detection.sh"
 echo -e "  Debug mode:  ./launch_multi_terminal_with_detection.sh --debug"
 echo ""
-echo -e "${GREEN}To view detection results in RViz2:${NC}"
-echo -e "  1. Add an Image display"
-echo -e "  2. Set the topic to /debug/ally/detection_image"
-echo -e "  3. You should see bounding boxes around detected objects"
+echo -e "${GREEN}To view results in RViz2:${NC}"
+echo -e "  Detection:"
+echo -e "    1. Add an Image display"
+echo -e "    2. Set the topic to /debug/ally/detection_image"
+echo -e "    3. You should see bounding boxes around detected objects"
+echo -e "  Tracking:"
+echo -e "    1. Add a Pose display"
+echo -e "    2. Set the topic to /enemy/pose"
+echo -e "    3. You should see the enemy position in world coordinates"
 echo ""

@@ -29,7 +29,7 @@ setup(
         package_name: [
             'models/*.pt',
             'models/*.pth',
-            'models/README.md',
+            'config.yaml',
         ],
     },
     include_package_data=True,
