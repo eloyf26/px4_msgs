@@ -36,7 +36,7 @@ class TrackingNode(Node):
             VehicleOdometry, '/fmu/out/vehicle_odometry',
             self.friendly_callback, qos_profile)
         self.camera_info_sub = self.create_subscription(
-            CameraInfo, '/camera/info',
+            CameraInfo, '/camera/camera_info',
             self.camera_info_callback, 10)
 
         # Coordinate transform
