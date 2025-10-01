@@ -5,10 +5,22 @@ from sensor_msgs.msg import Image
 from cv_bridge import CvBridge, CvBridgeError
 from halcon1_msgs.msg import DroneDetection
 from halcon1_detection.detection_algorithm import DetectionAlgorithm
+import sys
+import os
 
 class DetectionNode(Node):
     def __init__(self):
         super().__init__('detection_node')
+
+        # Debug: Print Python environment info
+        print("=" * 60)
+        print("PYTHON ENVIRONMENT DEBUG INFO")
+        print("=" * 60)
+        print(f"Python executable: {sys.executable}")
+        print(f"Python version: {sys.version}")
+        print(f"Virtual env: {os.environ.get('VIRTUAL_ENV', 'NOT SET')}")
+        print(f"Python path: {sys.path[:3]}...")  # First 3 entries
+        print("=" * 60)
 
         # Publishers
         self.detection_pub = self.create_publisher(DroneDetection, '/enemy/detection', 10)

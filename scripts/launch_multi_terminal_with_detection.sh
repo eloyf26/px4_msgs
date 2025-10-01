@@ -175,6 +175,7 @@ echo '  - /debug/ally/detection_image: Annotated camera feed'; \
 echo ''; \
 source $ROS_SETUP; \
 source $WS_SETUP; \
+source $WS_ROS2/venv/bin/activate; \
 echo -e '${GREEN}Detection node starting...${NC}'; \
 ros2 run halcon1_detection detection_node"
 open_terminal "Detection Node" "$DETECTION_CMD" "$CYAN"
