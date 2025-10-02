@@ -10,7 +10,7 @@ Right now everything is ready so that you can forget about ROS2 and just impleme
 
 Generic Improvmenets
 - [ ] Guidance
-  - [ ] Add process noise to Kalman Filter
+  - [x] Add process noise to Kalman Filter
   - [ ] Proportional navigation
     - [ ] Agile drone movement (feels clunky right now)
     - [ ] Directional acceleration aim at future drone position (not current)

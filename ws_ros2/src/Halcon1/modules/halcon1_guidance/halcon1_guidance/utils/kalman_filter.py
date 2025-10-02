@@ -3,7 +3,7 @@ from dataclasses import dataclass
 
 @dataclass
 class KalmanFilterParameters:
-    process_noise: float = 0.1  # Process noise intensity
+    process_noise: float = 0.1  # Process noise intensity (i.e. wind)
     sigma_pos: float = 0.5  # Measurement noise standard deviation (position)
 
 class KalmanFilter:
@@ -43,6 +43,32 @@ class KalmanFilter:
         F[3:6, 6:9] = np.eye(3) * dt
         return F
 
+    @staticmethod
+    def _get_process_noise_covariance(dt: float, q: float) -> np.ndarray:
+        """
+        Process noise covariance matrix for constant acceleration model.
+        q: process noise intensity
+        """
+        Q = np.zeros((9, 9))
+        dt2 = dt * dt
+        dt3 = dt2 * dt
+        dt4 = dt3 * dt
+
+        # Position noise
+        Q[0:3, 0:3] = np.eye(3) * (dt4 / 4.0) * q
+        # Cross terms position-velocity
+        Q[0:3, 3:6] = np.eye(3) * (dt3 / 2.0) * q
+        Q[3:6, 0:3] = Q[0:3, 3:6].T
+        # Velocity noise
+        Q[3:6, 3:6] = np.eye(3) * dt2 * q
+        # Cross terms velocity-acceleration
+        Q[3:6, 6:9] = np.eye(3) * dt * q
+        Q[6:9, 3:6] = Q[3:6, 6:9].T
+        # Acceleration noise
+        Q[6:9, 6:9] = np.eye(3) * q
+
+        return Q
+
     def predict(self, current_time_millis: int) -> (np.ndarray, np.ndarray):
         """
         Predict step of Kalman filter.
@@ -68,8 +94,9 @@ class KalmanFilter:
         self.latest_update_millis = current_time_millis
 
         F = self._get_state_transition_matrix(dt)
+        Q = self._get_process_noise_covariance(dt, self.params.process_noise)
         self.state = F @ self.state
-        self.P = F @ self.P @ F.T
+        self.P = F @ self.P @ F.T + Q
 
         # Full state measurement (position + velocity)
         innovation = measurement - self.H @ self.state
