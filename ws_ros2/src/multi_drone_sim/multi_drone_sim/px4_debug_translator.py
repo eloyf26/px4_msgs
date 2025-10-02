@@ -3,10 +3,11 @@
 import rclpy
 from rclpy.node import Node
 from rclpy.qos import QoSProfile, ReliabilityPolicy, HistoryPolicy, DurabilityPolicy
-from px4_msgs.msg import VehicleLocalPosition, TrajectorySetpoint, VehicleStatus, VehicleOdometry
+from px4_msgs.msg import TrajectorySetpoint, VehicleStatus, VehicleOdometry
 from geometry_msgs.msg import PoseStamped, TwistStamped, Vector3Stamped
 from nav_msgs.msg import Path, Odometry
 from std_msgs.msg import Header, String, Int32
+from halcon1_utils import CoordinateTransform
 import math
 
 
@@ -34,16 +35,32 @@ class PX4DebugTranslator(Node):
             depth=10
         )
 
+        # Declare parameters for enemy position offset
+        self.declare_parameter('enemy_offset_x', 0.0)
+        self.declare_parameter('enemy_offset_y', 0.0)
+        self.declare_parameter('enemy_offset_z', 0.0)
+
+        # Get enemy offset parameters (specified in Gazebo NED coordinates)
+        enemy_offset_ned_x = self.get_parameter('enemy_offset_x').value
+        enemy_offset_ned_y = self.get_parameter('enemy_offset_y').value
+        enemy_offset_ned_z = self.get_parameter('enemy_offset_z').value
+
+        self.get_logger().info(f'Enemy spawn offset (Gazebo NED): x={enemy_offset_ned_x}, y={enemy_offset_ned_y}, z={enemy_offset_ned_z}')
+
+        # Store as NED offset - will be added in NED space before conversion
         # Track both drones
         # Instance 0 uses no namespace for compatibility, instance 1 uses px4_1
         self.drones = [
             {'id': 0, 'namespace': '', 'name': 'ally'},
-            {'id': 1, 'namespace': 'px4_1', 'name': 'enemy'}
+            {'id': 1, 'namespace': 'px4_1', 'name': 'enemy', 'offset_ned': [enemy_offset_ned_x, enemy_offset_ned_y, enemy_offset_ned_z]}
         ]
 
         # Initialize paths for each drone
         self.paths = {}
         self.max_path_length = 1000
+
+        # Store drone info by name for callback access
+        self.drone_info = {drone['name']: drone for drone in self.drones}
 
         # Setup subscribers and publishers for each drone
         for drone in self.drones:
@@ -73,26 +90,21 @@ class PX4DebugTranslator(Node):
 
         # Subscribers
         self.create_subscription(
-            VehicleLocalPosition,
-            f'{topic_prefix}/fmu/out/vehicle_local_position_v1',
-            lambda msg, n=name: self.position_callback(msg, n),
-            self.px4_qos)
-
-        self.create_subscription(
             TrajectorySetpoint,
             f'{topic_prefix}/fmu/in/trajectory_setpoint',
             lambda msg, n=name: self.setpoint_callback(msg, n),
             self.px4_qos)
 
-        self.create_subscription(
-            VehicleStatus,
-            f'{topic_prefix}/fmu/out/vehicle_status_v1',
-            lambda msg, n=name: self.status_callback(msg, n),
-            self.px4_qos)
+        # Note: vehicle_status_v1 has no data, commenting out for now
+        # self.create_subscription(
+        #     VehicleStatus,
+        #     f'{topic_prefix}/fmu/out/vehicle_status_v1',
+        #     lambda msg, n=name: self.status_callback(msg, n),
+        #     self.px4_qos)
 
         self.create_subscription(
             VehicleOdometry,
-            f'{topic_prefix}/fmu/out/vehicle_odometry_v1',
+            f'{topic_prefix}/fmu/out/vehicle_odometry',
             lambda msg, n=name: self.odometry_callback(msg, n),
             self.px4_qos)
 
@@ -118,48 +130,6 @@ class PX4DebugTranslator(Node):
         setattr(self, f'{name}_nav_state_pub', self.create_publisher(
             Int32, f'/debug/{name}/nav_state', self.ros_qos))
 
-    def position_callback(self, msg, drone_name):
-        """Convert VehicleLocalPosition to multiple ROS2 standard types."""
-        # Create PoseStamped
-        pose = PoseStamped()
-        pose.header.stamp = self.get_clock().now().to_msg()
-        pose.header.frame_id = 'world'
-
-        # Position (NED to ENU: x=x, y=-y, z=-z)
-        pose.pose.position.x = msg.x
-        pose.pose.position.y = -msg.y
-        pose.pose.position.z = -msg.z
-
-        # Orientation from heading (yaw only, as VehicleLocalPosition doesn't have full quaternion)
-        # Convert NED heading to ENU orientation
-        yaw = -msg.heading + math.pi/2  # NED to ENU conversion
-        pose.pose.orientation.w = math.cos(yaw/2)
-        pose.pose.orientation.x = 0.0
-        pose.pose.orientation.y = 0.0
-        pose.pose.orientation.z = math.sin(yaw/2)
-
-        # Publish pose
-        getattr(self, f'{drone_name}_pose_pub').publish(pose)
-
-        # Create and publish TwistStamped for velocity
-        twist = TwistStamped()
-        twist.header = pose.header
-        twist.twist.linear.x = msg.vx
-        twist.twist.linear.y = -msg.vy  # NED to ENU
-        twist.twist.linear.z = -msg.vz  # NED to ENU
-        getattr(self, f'{drone_name}_velocity_pub').publish(twist)
-
-        # Update path
-        self.paths[drone_name].header.stamp = pose.header.stamp
-        self.paths[drone_name].poses.append(pose)
-
-        # Limit path length
-        if len(self.paths[drone_name].poses) > self.max_path_length:
-            self.paths[drone_name].poses.pop(0)
-
-        # Publish path
-        getattr(self, f'{drone_name}_path_pub').publish(self.paths[drone_name])
-
     def setpoint_callback(self, msg, drone_name):
         """Convert TrajectorySetpoint to PoseStamped."""
         try:
@@ -167,11 +137,17 @@ class PX4DebugTranslator(Node):
             pose.header.stamp = self.get_clock().now().to_msg()
             pose.header.frame_id = 'world'
 
-            # Position (NED to ENU)
+            # Position (NED to ENU using utility)
             if hasattr(msg, 'position') and len(msg.position) >= 3:
-                pose.pose.position.x = float(msg.position[0]) if not math.isnan(msg.position[0]) else 0.0
-                pose.pose.position.y = float(-msg.position[1]) if not math.isnan(msg.position[1]) else 0.0
-                pose.pose.position.z = float(-msg.position[2]) if not math.isnan(msg.position[2]) else 0.0
+                ned_pos = [
+                    float(msg.position[0]) if not math.isnan(msg.position[0]) else 0.0,
+                    float(msg.position[1]) if not math.isnan(msg.position[1]) else 0.0,
+                    float(msg.position[2]) if not math.isnan(msg.position[2]) else 0.0
+                ]
+                enu_pos = CoordinateTransform.ned_to_enu_position(ned_pos)
+                pose.pose.position.x = enu_pos.x
+                pose.pose.position.y = enu_pos.y
+                pose.pose.position.z = enu_pos.z
 
             # Default orientation (can be enhanced if yaw is available)
             pose.pose.orientation.w = 1.0
@@ -213,39 +189,73 @@ class PX4DebugTranslator(Node):
         getattr(self, f'{drone_name}_nav_state_pub').publish(nav_state_msg)
 
     def odometry_callback(self, msg, drone_name):
-        """Convert VehicleOdometry to nav_msgs/Odometry."""
+        """Convert VehicleOdometry to nav_msgs/Odometry and PoseStamped."""
         try:
             odom = Odometry()
             odom.header.stamp = self.get_clock().now().to_msg()
             odom.header.frame_id = 'world'
             odom.child_frame_id = f'{drone_name}_base_link'
 
-            # Position (NED to ENU)
+            # Position (NED to ENU using utility)
             if hasattr(msg, 'position') and len(msg.position) >= 3:
-                odom.pose.pose.position.x = msg.position[0]
-                odom.pose.pose.position.y = -msg.position[1]
-                odom.pose.pose.position.z = -msg.position[2]
+                # Apply offset if drone has one (enemy drone only)
+                # Offset is in NED coordinates, add before converting to ENU
+                if 'offset_ned' in self.drone_info[drone_name]:
+                    offset_ned = self.drone_info[drone_name]['offset_ned']
+                    global_ned_pos = [
+                        msg.position[0] + offset_ned[0],
+                        msg.position[1] + offset_ned[1],
+                        msg.position[2] + offset_ned[2]
+                    ]
+                else:
+                    global_ned_pos = msg.position
 
-            # Orientation
+                enu_pos = CoordinateTransform.ned_to_enu_position(global_ned_pos)
+                odom.pose.pose.position.x = float(enu_pos.x)
+                odom.pose.pose.position.y = float(enu_pos.y)
+                odom.pose.pose.position.z = float(enu_pos.z)
+
+            # Orientation (NED to ENU quaternion using utility)
             if hasattr(msg, 'q') and len(msg.q) >= 4:
-                odom.pose.pose.orientation.w = msg.q[0]
-                odom.pose.pose.orientation.x = msg.q[1]
-                odom.pose.pose.orientation.y = -msg.q[2]
-                odom.pose.pose.orientation.z = -msg.q[3]
+                enu_quat = CoordinateTransform.ned_to_enu_quaternion(list(msg.q))
+                odom.pose.pose.orientation.x = float(enu_quat[0])
+                odom.pose.pose.orientation.y = float(enu_quat[1])
+                odom.pose.pose.orientation.z = float(enu_quat[2])
+                odom.pose.pose.orientation.w = float(enu_quat[3])
 
-            # Velocity (NED to ENU)
+            # Velocity (NED to ENU using utility)
             if hasattr(msg, 'velocity') and len(msg.velocity) >= 3:
-                odom.twist.twist.linear.x = msg.velocity[0]
-                odom.twist.twist.linear.y = -msg.velocity[1]
-                odom.twist.twist.linear.z = -msg.velocity[2]
+                enu_vel = CoordinateTransform.ned_to_enu_position(msg.velocity)
+                odom.twist.twist.linear.x = float(enu_vel.x)
+                odom.twist.twist.linear.y = float(enu_vel.y)
+                odom.twist.twist.linear.z = float(enu_vel.z)
 
-            # Angular velocity
+            # Angular velocity (NED to ENU using utility)
             if hasattr(msg, 'angular_velocity') and len(msg.angular_velocity) >= 3:
-                odom.twist.twist.angular.x = msg.angular_velocity[0]
-                odom.twist.twist.angular.y = -msg.angular_velocity[1]
-                odom.twist.twist.angular.z = -msg.angular_velocity[2]
+                enu_ang_vel = CoordinateTransform.ned_to_enu_position(msg.angular_velocity)
+                odom.twist.twist.angular.x = float(enu_ang_vel.x)
+                odom.twist.twist.angular.y = float(enu_ang_vel.y)
+                odom.twist.twist.angular.z = float(enu_ang_vel.z)
 
             getattr(self, f'{drone_name}_odom_pub').publish(odom)
+
+            # Also publish as PoseStamped for easier visualization
+            pose = PoseStamped()
+            pose.header = odom.header
+            pose.pose = odom.pose.pose
+            getattr(self, f'{drone_name}_pose_pub').publish(pose)
+
+            # Update path
+            self.paths[drone_name].header.stamp = pose.header.stamp
+            self.paths[drone_name].poses.append(pose)
+
+            # Limit path length
+            if len(self.paths[drone_name].poses) > self.max_path_length:
+                self.paths[drone_name].poses.pop(0)
+
+            # Publish path
+            getattr(self, f'{drone_name}_path_pub').publish(self.paths[drone_name])
+
         except Exception as e:
             self.get_logger().error(f"Error in odometry_callback for {drone_name}: {e}")
 
