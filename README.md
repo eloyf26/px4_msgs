@@ -170,6 +170,140 @@ Halcon1 also supports **AirSim + Unreal Engine** as an alternative simulation en
 
 #### Installation
 
+**WSL2 GPU Setup (Windows Users Only)**
+
+If you're running on WSL2 (Windows Subsystem for Linux 2), you need to set up GPU support for AirSim/Unreal Engine. Native Linux users can skip this section.
+
+<details>
+<summary><b>Click to expand WSL2 GPU setup instructions</b></summary>
+
+**Prerequisites:**
+- Windows 10 version 21H2 (build 19044) or higher, OR Windows 11
+- NVIDIA GPU (Pascal architecture or newer: GTX 1060+, all RTX series)
+- WSL2 already installed with Ubuntu 22.04
+
+**Check your Windows version:**
+```powershell
+# Run in PowerShell
+winver
+```
+
+**Step 1: Install NVIDIA Driver on Windows (Host)**
+
+⚠️ **IMPORTANT**: Install the driver on Windows, NOT inside WSL2. WSL2 will automatically use the Windows driver.
+
+1. Download the latest **Game Ready Driver** or **Studio Driver** from [NVIDIA's website](https://www.nvidia.com/Download/index.aspx)
+2. Install on Windows (standard installation)
+3. Reboot Windows
+
+**Verify driver is accessible from WSL2:**
+```bash
+# Run inside WSL2
+nvidia-smi
+```
+
+You should see GPU information. If this fails, your Windows driver is not WSL2-compatible or too old.
+
+**Step 2: Install Vulkan Drivers in WSL2**
+
+AirSim/Unreal Engine requires Vulkan for rendering. Install Mesa Vulkan drivers:
+
+```bash
+# Add Mesa PPA for latest Vulkan drivers
+sudo add-apt-repository ppa:kisak/kisak-mesa -y
+sudo apt update
+
+# Install Vulkan drivers and tools
+sudo apt install -y mesa-vulkan-drivers vulkan-tools
+
+# Verify Vulkan installation
+vulkaninfo --summary
+```
+
+**Expected output:**
+```
+Vulkan Instance Version: 1.3.xxx
+...
+GPU id : 0 (NVIDIA GeForce RTX ...)
+```
+
+If you see `Cannot create Vulkan instance`, the driver setup failed.
+
+**Step 3: Install CUDA Toolkit in WSL2 (Optional but Recommended)**
+
+CUDA is useful for running YOLO and other AI models on GPU:
+
+```bash
+# Download and install WSL-specific CUDA repository pin
+wget https://developer.download.nvidia.com/compute/cuda/repos/wsl-ubuntu/x86_64/cuda-wsl-ubuntu.pin
+sudo mv cuda-wsl-ubuntu.pin /etc/apt/preferences.d/cuda-repository-pin-600
+
+# Add CUDA repository
+wget https://developer.download.nvidia.com/compute/cuda/repos/wsl-ubuntu/x86_64/cuda-keyring_1.1-1_all.deb
+sudo dpkg -i cuda-keyring_1.1-1_all.deb
+
+# Update and install CUDA toolkit (this may take 10-15 minutes)
+sudo apt update
+sudo apt install -y cuda-toolkit-12-6
+
+# Add CUDA to PATH (add to ~/.bashrc for persistence)
+echo 'export PATH=/usr/local/cuda/bin:$PATH' >> ~/.bashrc
+echo 'export LD_LIBRARY_PATH=/usr/local/cuda/lib64:$LD_LIBRARY_PATH' >> ~/.bashrc
+source ~/.bashrc
+```
+
+**Verify CUDA installation:**
+```bash
+nvcc --version
+```
+
+**Expected output:**
+```
+nvcc: NVIDIA (R) Cuda compiler driver
+...
+Cuda compilation tools, release 12.6, ...
+```
+
+**Step 4: Test GPU Acceleration**
+
+```bash
+# Check that NVIDIA GPU is detected
+nvidia-smi
+
+# Verify Vulkan can see the GPU
+vulkaninfo | grep -i "deviceName"
+
+# Test CUDA (if installed)
+nvidia-smi --query-gpu=name,driver_version,cuda_version --format=csv
+```
+
+**Troubleshooting:**
+
+**Problem: `nvidia-smi` not found or shows error**
+- Solution: Update Windows NVIDIA driver to latest version (requires Windows reboot)
+- Ensure you're on Windows 10 21H2+ or Windows 11
+
+**Problem: `vulkaninfo` shows "Cannot create Vulkan instance"**
+- Solution: Install mesa drivers from PPA (Step 2 above)
+- Try: `sudo apt install --reinstall mesa-vulkan-drivers`
+
+**Problem: AirSim shows "Incompatible Vulkan driver" error**
+- Solution: Ensure both steps completed:
+  1. Windows NVIDIA driver installed
+  2. Mesa Vulkan drivers installed in WSL2
+- Try: `VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/nvidia_icd.json ./Blocks.sh`
+
+**Problem: Poor performance or low FPS in AirSim**
+- Solution: Increase WSLg memory allocation. Create/edit `C:\Users\<YourUsername>\.wslconfig`:
+  ```
+  [wsl2]
+  memory=8GB
+  processors=4
+  ```
+- Restart WSL: `wsl --shutdown` in PowerShell
+
+</details>
+
 **Step 1: Install AirSim Prebuilt Environment**
 
 Download a prebuilt Unreal Engine + AirSim binary (no compilation needed):
@@ -187,7 +321,7 @@ unzip Blocks.zip
 
 # Test that it runs
 cd LinuxBlocks1.8.1/LinuxNoEditor
-./Blocks.sh
+bash Blocks.sh
 ```
 
 **Note**: First launch may take a few minutes. You should see an Unreal Engine window with a simple environment and "Waiting for connection..." message.
