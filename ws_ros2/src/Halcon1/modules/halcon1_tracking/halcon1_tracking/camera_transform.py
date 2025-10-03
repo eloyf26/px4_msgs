@@ -34,7 +34,7 @@ def camera_to_world_coordinates(
     Args:
         drone_detection: Bounding box detection from camera
         friendly_pose: Friendly drone position in ENU frame
-        friendly_orientation: Friendly drone quaternion in ENU frame
+        friendly_orientation: Friendly drone quaternion [x,y,z,w] in ENU frame (FLU-to-ENU)
         camera_intrinsics: Camera intrinsic parameters
         enemy_drone_width: Known width of enemy drone for depth estimation
         enemy_drone_height: Known height of enemy drone for depth estimation
@@ -69,35 +69,30 @@ def camera_to_world_coordinates(
     camera_frame_y = -offset_right      # left = -(right) (was -optical X)
     camera_frame_z = -offset_down       # up = -(down) (was -optical Y)
 
-    # Step 3: Transform camera frame to world frame using friendly drone orientation
-    rotation_matrix = quaternion_to_rotation_matrix(friendly_orientation)
+    # Step 3: Camera frame to body frame
+    # Camera frame (ROS): X=forward, Y=left, Z=up
+    # Body frame (ROS2 FLU): X=forward, Y=left, Z=up
+    # These frames are IDENTICAL, so no transformation needed!
     enemy_position_camera_frame = np.array([camera_frame_x, camera_frame_y, camera_frame_z])
+    enemy_position_body_frame = enemy_position_camera_frame  # Identity transform
 
-    # TEMPORARY FIX: Hardcoded rotation for camera pointing North (+Y in ENU)
-    # Camera frame: X=forward, Y=left, Z=up
-    # World frame (ENU): X=East, Y=North, Z=Up
-    # Mapping: Camera +X (forward) → World +Y (North)
-    #          Camera +Y (left) → World -X (West)
-    #          Camera +Z (up) → World +Z (Up)
-    rotation_matrix_fixed = np.array([
-        [ 0, -1,  0],  # World X = -Camera Y (left→West means -left→East)
-        [ 1,  0,  0],  # World Y = Camera X (forward→North)
-        [ 0,  0,  1]   # World Z = Camera Z (up→up)
-    ])
+    # Step 4: Transform from body FLU frame to world ENU frame (dynamic, from quaternion)
+    # The quaternion represents FLU-to-ENU rotation (converted from PX4's FRD-to-NED)
+    # Rotation matrix R transforms body vectors to world: v_world_enu = R @ v_body_flu
+    rotation_matrix = quaternion_to_rotation_matrix(friendly_orientation)
+    enemy_position_world_relative = rotation_matrix @ enemy_position_body_frame
 
     # Debug logging
     if logger:
-        logger.info(f'Camera frame position: [{camera_frame_x:.2f}, {camera_frame_y:.2f}, {camera_frame_z:.2f}]')
-        logger.info(f'Friendly quaternion: {friendly_orientation}')
-        logger.info(f'Rotation matrix (from quat):\n{rotation_matrix}')
-        logger.info(f'Rotation matrix (fixed):\n{rotation_matrix_fixed}')
+        logger.info(f'Camera frame: [{camera_frame_x:.2f}, {camera_frame_y:.2f}, {camera_frame_z:.2f}]')
+        logger.info(f'Body frame: [{enemy_position_body_frame[0]:.2f}, {enemy_position_body_frame[1]:.2f}, {enemy_position_body_frame[2]:.2f}]')
+        logger.info(f'Friendly quaternion (ENU): {friendly_orientation}')
+        logger.info(f'After rotation: [{enemy_position_world_relative[0]:.2f}, {enemy_position_world_relative[1]:.2f}, {enemy_position_world_relative[2]:.2f}]')
 
-    # Use fixed matrix for now
-    rotation_matrix = rotation_matrix_fixed
+    rotated_position = enemy_position_world_relative
 
-    # Step 4: Add friendly drone's absolute position to get enemy's absolute position
+    # Step 5: Add friendly drone's absolute position to get enemy's absolute position
     camera_position = np.array([friendly_pose.x, friendly_pose.y, friendly_pose.z])
-    rotated_position = rotation_matrix @ enemy_position_camera_frame
 
     if logger:
         logger.info(f'After rotation: [{rotated_position[0]:.2f}, {rotated_position[1]:.2f}, {rotated_position[2]:.2f}]')
@@ -111,7 +106,7 @@ def camera_to_world_coordinates(
 
 
 def quaternion_to_rotation_matrix(q: list[float]) -> np.ndarray:
-    """Convert quaternion (x, y, z, w) to rotation matrix"""
+    """Convert quaternion [x, y, z, w] to rotation matrix"""
     x, y, z, w = q
     # normalize (safety)
     n = x*x + y*y + z*z + w*w

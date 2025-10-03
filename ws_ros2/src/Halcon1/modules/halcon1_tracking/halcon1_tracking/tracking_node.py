@@ -55,12 +55,16 @@ class TrackingNode(Node):
         self.get_logger().info('Tracking node initialized - waiting for detections and friendly pose...')
 
     def friendly_callback(self, msg):
-        """Update friendly drone pose from PX4 odometry (includes orientation)"""
-        # Convert position from NED to ENU
-        self.friendly_pose = CoordinateTransform.ned_to_enu_position(msg.position)
+        """Update friendly drone pose and orientation from PX4 odometry."""
+        # Transform position from NED to ENU
+        self.friendly_pose = CoordinateTransform.ned_to_enu_local_frame(msg.position)
 
-        # Convert orientation quaternion from NED to ENU
-        self.friendly_orientation = CoordinateTransform.ned_to_enu_quaternion(list(msg.q))
+        # Reorder PX4 quaternion from [w,x,y,z] to [x,y,z,w]
+        q_px4_wxyz = list(msg.q)
+        q_px4_xyzw = [q_px4_wxyz[1], q_px4_wxyz[2], q_px4_wxyz[3], q_px4_wxyz[0]]
+
+        # Transform orientation from PX4 (FRD-to-NED) to ROS2 (FLU-to-ENU)
+        self.friendly_orientation = CoordinateTransform.px4_to_ros_orientation(q_px4_xyzw)
 
     def camera_info_callback(self, msg):
         """Update the camera intrinsic parameters from CameraInfo message"""

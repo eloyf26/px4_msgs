@@ -35,24 +35,34 @@ class PX4DebugTranslator(Node):
             depth=10
         )
 
-        # Declare parameters for enemy position offset
+        # Declare parameters for enemy position offset (in Gazebo ENU coordinates)
         self.declare_parameter('enemy_offset_x', 0.0)
         self.declare_parameter('enemy_offset_y', 0.0)
         self.declare_parameter('enemy_offset_z', 0.0)
 
-        # Get enemy offset parameters (specified in Gazebo NED coordinates)
-        enemy_offset_ned_x = self.get_parameter('enemy_offset_x').value
-        enemy_offset_ned_y = self.get_parameter('enemy_offset_y').value
-        enemy_offset_ned_z = self.get_parameter('enemy_offset_z').value
+        # Get enemy offset parameters (specified in Gazebo ENU coordinates)
+        enemy_offset_enu_x = self.get_parameter('enemy_offset_x').value
+        enemy_offset_enu_y = self.get_parameter('enemy_offset_y').value
+        enemy_offset_enu_z = self.get_parameter('enemy_offset_z').value
 
-        self.get_logger().info(f'Enemy spawn offset (Gazebo NED): x={enemy_offset_ned_x}, y={enemy_offset_ned_y}, z={enemy_offset_ned_z}')
+        self.get_logger().info(f'Enemy spawn offset (Gazebo ENU): x={enemy_offset_enu_x}, y={enemy_offset_enu_y}, z={enemy_offset_enu_z}')
+
+        # Convert Gazebo ENU offset to NED for internal use
+        # ENU [x_east, y_north, z_up] -> NED [x_north, y_east, z_down]
+        enemy_offset_ned = [
+            enemy_offset_enu_y,   # North = ENU Y
+            enemy_offset_enu_x,   # East = ENU X
+            -enemy_offset_enu_z   # Down = -ENU Z
+        ]
+
+        self.get_logger().info(f'Enemy spawn offset (NED): x={enemy_offset_ned[0]}, y={enemy_offset_ned[1]}, z={enemy_offset_ned[2]}')
 
         # Store as NED offset - will be added in NED space before conversion
         # Track both drones
         # Instance 0 uses no namespace for compatibility, instance 1 uses px4_1
         self.drones = [
             {'id': 0, 'namespace': '', 'name': 'ally'},
-            {'id': 1, 'namespace': 'px4_1', 'name': 'enemy', 'offset_ned': [enemy_offset_ned_x, enemy_offset_ned_y, enemy_offset_ned_z]}
+            {'id': 1, 'namespace': 'px4_1', 'name': 'enemy', 'offset_ned': enemy_offset_ned}
         ]
 
         # Initialize paths for each drone
@@ -137,14 +147,14 @@ class PX4DebugTranslator(Node):
             pose.header.stamp = self.get_clock().now().to_msg()
             pose.header.frame_id = 'world'
 
-            # Position (NED to ENU using utility)
+            # Transform position from NED to ENU
             if hasattr(msg, 'position') and len(msg.position) >= 3:
                 ned_pos = [
                     float(msg.position[0]) if not math.isnan(msg.position[0]) else 0.0,
                     float(msg.position[1]) if not math.isnan(msg.position[1]) else 0.0,
                     float(msg.position[2]) if not math.isnan(msg.position[2]) else 0.0
                 ]
-                enu_pos = CoordinateTransform.ned_to_enu_position(ned_pos)
+                enu_pos = CoordinateTransform.ned_to_enu_local_frame(ned_pos)
                 pose.pose.position.x = enu_pos.x
                 pose.pose.position.y = enu_pos.y
                 pose.pose.position.z = enu_pos.z
@@ -196,7 +206,7 @@ class PX4DebugTranslator(Node):
             odom.header.frame_id = 'world'
             odom.child_frame_id = f'{drone_name}_base_link'
 
-            # Position (NED to ENU using utility)
+            # Transform position from NED to ENU
             if hasattr(msg, 'position') and len(msg.position) >= 3:
                 # Apply offset if drone has one (enemy drone only)
                 # Offset is in NED coordinates, add before converting to ENU
@@ -210,29 +220,33 @@ class PX4DebugTranslator(Node):
                 else:
                     global_ned_pos = msg.position
 
-                enu_pos = CoordinateTransform.ned_to_enu_position(global_ned_pos)
+                enu_pos = CoordinateTransform.ned_to_enu_local_frame(global_ned_pos)
                 odom.pose.pose.position.x = float(enu_pos.x)
                 odom.pose.pose.position.y = float(enu_pos.y)
                 odom.pose.pose.position.z = float(enu_pos.z)
 
-            # Orientation (NED to ENU quaternion using utility)
+            # Transform orientation from PX4 (FRD-to-NED) to ROS2 (FLU-to-ENU)
             if hasattr(msg, 'q') and len(msg.q) >= 4:
-                enu_quat = CoordinateTransform.ned_to_enu_quaternion(list(msg.q))
+                # Reorder PX4 quaternion from [w,x,y,z] to [x,y,z,w]
+                q_px4_wxyz = list(msg.q)
+                q_px4_xyzw = [q_px4_wxyz[1], q_px4_wxyz[2], q_px4_wxyz[3], q_px4_wxyz[0]]
+
+                enu_quat = CoordinateTransform.px4_to_ros_orientation(q_px4_xyzw)
                 odom.pose.pose.orientation.x = float(enu_quat[0])
                 odom.pose.pose.orientation.y = float(enu_quat[1])
                 odom.pose.pose.orientation.z = float(enu_quat[2])
                 odom.pose.pose.orientation.w = float(enu_quat[3])
 
-            # Velocity (NED to ENU using utility)
+            # Transform velocity from NED to ENU
             if hasattr(msg, 'velocity') and len(msg.velocity) >= 3:
-                enu_vel = CoordinateTransform.ned_to_enu_position(msg.velocity)
+                enu_vel = CoordinateTransform.ned_to_enu_local_frame(msg.velocity)
                 odom.twist.twist.linear.x = float(enu_vel.x)
                 odom.twist.twist.linear.y = float(enu_vel.y)
                 odom.twist.twist.linear.z = float(enu_vel.z)
 
-            # Angular velocity (NED to ENU using utility)
+            # Transform angular velocity from NED to ENU
             if hasattr(msg, 'angular_velocity') and len(msg.angular_velocity) >= 3:
-                enu_ang_vel = CoordinateTransform.ned_to_enu_position(msg.angular_velocity)
+                enu_ang_vel = CoordinateTransform.ned_to_enu_local_frame(msg.angular_velocity)
                 odom.twist.twist.angular.x = float(enu_ang_vel.x)
                 odom.twist.twist.angular.y = float(enu_ang_vel.y)
                 odom.twist.twist.angular.z = float(enu_ang_vel.z)
