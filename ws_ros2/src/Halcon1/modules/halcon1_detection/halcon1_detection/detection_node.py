@@ -12,6 +12,10 @@ class DetectionNode(Node):
     def __init__(self):
         super().__init__('detection_node')
 
+        # Declare and get debug parameter
+        self.declare_parameter('debug', False)
+        self.debug_mode = self.get_parameter('debug').get_parameter_value().bool_value
+
         # Debug: Print Python environment info
         print("=" * 60)
         print("PYTHON ENVIRONMENT DEBUG INFO")
@@ -20,11 +24,17 @@ class DetectionNode(Node):
         print(f"Python version: {sys.version}")
         print(f"Virtual env: {os.environ.get('VIRTUAL_ENV', 'NOT SET')}")
         print(f"Python path: {sys.path[:3]}...")  # First 3 entries
+        print(f"Debug mode: {self.debug_mode}")
         print("=" * 60)
 
         # Publishers
         self.detection_pub = self.create_publisher(DroneDetection, '/enemy/detection', 10)
-        self.debug_image_pub = self.create_publisher(Image, '/debug/ally/detection_image', 10)
+
+        # Only create debug image publisher if debug mode is enabled
+        if self.debug_mode:
+            self.debug_image_pub = self.create_publisher(Image, '/debug/ally/detection_image', 10)
+        else:
+            self.debug_image_pub = None
 
         # Subscriber for camera images (use standard sensor QoS)
         self.image_sub = self.create_subscription(
@@ -43,9 +53,13 @@ class DetectionNode(Node):
         self.detection_count = 0
 
         self.get_logger().info('Detection node initialized')
+        self.get_logger().info(f'Debug mode: {self.debug_mode}')
         self.get_logger().info('Subscribing to: /camera/image')
         self.get_logger().info('Publishing detections to: /enemy/detection')
-        self.get_logger().info('Publishing debug images to: /debug/ally/detection_image')
+        if self.debug_mode:
+            self.get_logger().info('Publishing debug images to: /debug/ally/detection_image')
+        else:
+            self.get_logger().info('Debug images disabled (pass -p debug:=true to enable)')
 
     def image_callback(self, image_msg):
         """Process incoming camera image and detect enemy drones"""
@@ -59,8 +73,8 @@ class DetectionNode(Node):
             return
 
         # Run detection algorithm on the image
-        # Returns both detection result and annotated image
-        detection_result, annotated_image = self.algorithm.detect(cv_image)
+        # Returns both detection result and annotated image (if debug mode enabled)
+        detection_result, annotated_image = self.algorithm.detect(cv_image, debug=self.debug_mode)
 
         # Check if we have a valid detection
         if detection_result.width > 0 and detection_result.height > 0:
@@ -94,13 +108,14 @@ class DetectionNode(Node):
             # No valid detection - log this for debugging
             self.get_logger().debug(f'No detection in frame {self.frame_count}')
 
-        # Convert annotated image back to ROS message and publish
-        try:
-            debug_msg = self.bridge.cv2_to_imgmsg(annotated_image, encoding='bgr8')
-            debug_msg.header = image_msg.header  # Preserve original header
-            self.debug_image_pub.publish(debug_msg)
-        except CvBridgeError as e:
-            self.get_logger().error(f'Failed to convert debug image: {e}')
+        # Convert annotated image back to ROS message and publish (only in debug mode)
+        if self.debug_mode and annotated_image is not None:
+            try:
+                debug_msg = self.bridge.cv2_to_imgmsg(annotated_image, encoding='bgr8')
+                debug_msg.header = image_msg.header  # Preserve original header
+                self.debug_image_pub.publish(debug_msg)
+            except CvBridgeError as e:
+                self.get_logger().error(f'Failed to convert debug image: {e}')
 
         # Periodic status update
         if self.frame_count % 30 == 0:

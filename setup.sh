@@ -98,18 +98,11 @@ echo "✓ GZ_VERSION=harmonic exported"
 sudo apt update
 sudo apt install -y ros-humble-rqt-image-view ros-humble-cv-bridge
 
-# Setup Python virtual environment for detection node
-echo "→ Setting up Python virtual environment for detection node..."
-cd ws_ros2
-python3 -m venv venv
-# Prevent colcon from scanning venv directory
-touch venv/COLCON_IGNORE
-source venv/bin/activate
-pip install --upgrade pip
-pip install -r src/Halcon1/modules/halcon1_detection/requirements.txt
-deactivate
-cd "$SCRIPT_DIR"
-echo "✓ Python virtual environment configured"
+# Install Python dependencies system-wide for detection node
+echo "→ Installing Python dependencies for detection node..."
+pip3 install --upgrade pip
+pip3 install -r ws_ros2/src/Halcon1/modules/halcon1_detection/requirements.txt
+echo "✓ Python dependencies installed system-wide"
 
 # 9. Build ROS2 workspace
 echo "→ Installing ROS2 build tools..."

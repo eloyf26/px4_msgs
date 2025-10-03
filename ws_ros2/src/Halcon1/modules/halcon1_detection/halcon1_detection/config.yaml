@@ -1,0 +1,34 @@
+# Halcon1 Detection Configuration
+
+# Selected model (options: yolo11n_base, yolo11n_drone, yolo11n_fast)
+selected_model: 'yolo11n_base'
+
+# Model configurations
+models:
+  yolo11n_base:
+    name: 'yolo11n.pt'
+    confidence_threshold: 0.5
+    nms_threshold: 0.45
+    target_classes: null  # null = all classes
+
+# Tracking consistency
+tracking:
+  max_distance_threshold: 200  # Max pixel distance to consider same target
+
+# Visualization settings (debug mode)
+visualization:
+  colors:
+    primary: [0, 255, 0]      # Green for primary detection (BGR)
+    secondary: [255, 255, 0]  # Cyan for secondary detections (BGR)
+    text: [255, 255, 255]     # White text (BGR)
+    info: [0, 255, 255]       # Yellow info overlay (BGR)
+
+  thickness:
+    primary: 3      # Primary detection box thickness
+    secondary: 2    # Secondary detection box thickness
+    text: 2         # Text thickness
+
+  font:
+    type: 0         # cv2.FONT_HERSHEY_SIMPLEX
+    scale: 0.6      # Font scale for labels
+    info_scale: 0.7 # Font scale for info overlay

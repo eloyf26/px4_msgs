@@ -181,18 +181,25 @@ open_terminal "Camera Bridge" "$BRIDGE_CMD" "$YELLOW"
 
 # Terminal 5: Detection Node (NEW)
 echo -e "${CYAN}Starting Terminal 5: Detection Node (YOLOv11n)...${NC}"
+# Build detection command with debug parameter if enabled
+if [ "$DEBUG_MODE" = true ]; then
+    DEBUG_PARAM="--ros-args -p debug:=true"
+    DEBUG_INFO="echo '  - /debug/ally/detection_image: Annotated camera feed (DEBUG MODE)';"
+else
+    DEBUG_PARAM=""
+    DEBUG_INFO="echo '  - Debug images disabled (use --debug flag to enable)';"
+fi
 DETECTION_CMD="echo -e '${CYAN}=== Detection Node (YOLOv11n) ===${NC}'; \
 echo -e '${YELLOW}Starting drone detection with YOLOv11n...${NC}'; \
 echo ''; \
 echo 'Detection outputs:'; \
 echo '  - /enemy/detection: Bounding box coordinates'; \
-echo '  - /debug/ally/detection_image: Annotated camera feed'; \
+$DEBUG_INFO \
 echo ''; \
 source $ROS_SETUP; \
 source $WS_SETUP; \
-source $WS_ROS2/venv/bin/activate; \
 echo -e '${GREEN}Detection node starting...${NC}'; \
-ros2 run halcon1_detection detection_node"
+ros2 run halcon1_detection detection_node $DEBUG_PARAM"
 open_terminal "Detection Node" "$DETECTION_CMD" "$CYAN"
 
 # Terminal 6: Tracking Node (NEW)
@@ -266,7 +273,11 @@ echo ""
 echo -e "${CYAN}Detection Node Info:${NC}"
 echo -e "  - Subscribes to: /camera/image"
 echo -e "  - Publishes detections to: /enemy/detection"
-echo -e "  - Publishes annotated images to: /debug/ally/detection_image"
+if [ "$DEBUG_MODE" = true ]; then
+    echo -e "  - Publishes annotated images to: /debug/ally/detection_image (DEBUG MODE)"
+else
+    echo -e "  - Annotated images disabled (use --debug flag to enable)"
+fi
 echo -e "  - Model: YOLOv11n (will download on first run)"
 echo ""
 echo -e "${MAGENTA}Tracking Node Info:${NC}"
@@ -279,10 +290,15 @@ echo -e "  Normal mode: ./launch_multi_terminal_with_detection.sh"
 echo -e "  Debug mode:  ./launch_multi_terminal_with_detection.sh --debug"
 echo ""
 echo -e "${GREEN}To view results in RViz2:${NC}"
-echo -e "  Detection:"
-echo -e "    1. Add an Image display"
-echo -e "    2. Set the topic to /debug/ally/detection_image"
-echo -e "    3. You should see bounding boxes around detected objects"
+if [ "$DEBUG_MODE" = true ]; then
+    echo -e "  Detection (DEBUG MODE):"
+    echo -e "    1. Add an Image display"
+    echo -e "    2. Set the topic to /debug/ally/detection_image"
+    echo -e "    3. You should see bounding boxes around detected objects"
+else
+    echo -e "  Detection:"
+    echo -e "    (Run with --debug flag to enable annotated image visualization)"
+fi
 echo -e "  Tracking:"
 echo -e "    1. Add a Pose display"
 echo -e "    2. Set the topic to /enemy/pose"
