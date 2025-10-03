@@ -1,5 +1,5 @@
 #!/bin/bash
-# Launch multi-drone simulation in separate terminals for live monitoring
+# Launch multi-drone simulation with detection node in separate terminals for live monitoring
 
 # Colors for terminal output
 RED='\033[0;31m'
@@ -7,6 +7,7 @@ GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 MAGENTA='\033[0;35m'
+CYAN='\033[0;36m'
 NC='\033[0m' # No Color
 
 # Parse command line arguments
@@ -31,7 +32,47 @@ PX4_DIR="$REPO_ROOT/external/PX4-Autopilot"
 MICRO_XRCE_AGENT="$REPO_ROOT/external/Micro-XRCE-DDS-Agent/build/MicroXRCEAgent"
 WS_ROS2="$REPO_ROOT/ws_ros2"
 
-echo -e "${GREEN}=== Multi-Drone Simulation Launcher ===${NC}"
+# ===== SIMULATION CONFIGURATION =====
+# Gazebo world settings
+GZ_WORLD="default"
+
+# PX4 configuration
+PX4_AUTOSTART="4001"
+PX4_GZ_SIM_RENDER_ENGINE="ogre2"
+export LIBGL_ALWAYS_SOFTWARE=1 # Software rendering for WSL/containers
+
+# Drone configuration
+ALLY_INSTANCE=0 # Do not change this if you want to use QGroundControl, the UDP port is assigned based on this value and QgroundControl fails to connect to other ports
+
+# Ally drone position and orientation
+ALLY_X=0
+ALLY_Y=0
+ALLY_Z=0
+ALLY_ROLL=0
+ALLY_PITCH=0
+ALLY_YAW=0  # Facing North (+X direction)
+ALLY_MODEL="x500_mono_cam"  # Using custom forward-facing camera model
+ALLY_POSITION="${ALLY_X},${ALLY_Y},${ALLY_Z},${ALLY_ROLL},${ALLY_PITCH},${ALLY_YAW}"
+
+# Enemy drone position and orientation
+ENEMY_INSTANCE=$((ALLY_INSTANCE + 1))
+ENEMY_X=5  # 5 meters North of ally (NED X = ENU Y)
+ENEMY_Y=0
+ENEMY_Z=0
+ENEMY_ROLL=0
+ENEMY_PITCH=0
+ENEMY_YAW=0  # Same as ally for debugging - both face North
+ENEMY_POSITION="${ENEMY_X},${ENEMY_Y},${ENEMY_Z},${ENEMY_ROLL},${ENEMY_PITCH},${ENEMY_YAW}"
+
+# Camera configuration
+GAZEBO_MODEL_NAME="${ALLY_MODEL}_${ALLY_INSTANCE}"
+
+# ROS paths
+ROS_SETUP="/opt/ros/humble/setup.bash"
+WS_SETUP="$WS_ROS2/install/setup.bash"
+
+echo -e "${GREEN}=== Multi-Drone Simulation Launcher with Detection ===${NC}"
+echo -e "${CYAN}*** DETECTION MODULE INCLUDED ***${NC}"
 echo -e "${YELLOW}Repository root: $REPO_ROOT${NC}"
 echo -e "${YELLOW}PX4 directory: $PX4_DIR${NC}"
 echo -e "${YELLOW}Workspace: $WS_ROS2${NC}"
@@ -76,64 +117,50 @@ echo -e "${YELLOW}Cleaning up existing processes...${NC}"
 pkill -f px4
 pkill -f MicroXRCEAgent
 pkill -f gz
+pkill -f detection_node
+pkill -f tracking_node
 sleep 2
 
-# Terminal 1: MicroXRCE Agent (for both drones)
+# Terminal 1: MicroXRCE Agent (for all drones)
 echo -e "${BLUE}Starting Terminal 1: MicroXRCE Agent...${NC}"
 AGENT_CMD="echo -e '${GREEN}=== MicroXRCE Agent ===${NC}'; \
-echo 'Starting agent on UDP ports 8888 and 8889 for both drones...'; \
-$MICRO_XRCE_AGENT udp4 -p 8888 & \
-AGENT1_PID=\$!; \
-sleep 1; \
-$MICRO_XRCE_AGENT udp4 -p 8889 & \
-AGENT2_PID=\$!; \
-echo 'Both agents started. Press Ctrl+C to stop.'; \
-wait \$AGENT1_PID \$AGENT2_PID"
+echo 'Starting agent on UDP port 8888 for all drones...'; \
+$MICRO_XRCE_AGENT udp4 -p 8888"
 open_terminal "MicroXRCE Agent" "$AGENT_CMD" "$GREEN"
 
 # Wait for agent to start
 sleep 3
 
-# Terminal 2: Ally Drone (Instance 0)
-echo -e "${BLUE}Starting Terminal 2: Ally Drone (Instance 0)...${NC}"
-ALLY_CMD="echo -e '${GREEN}=== Ally Drone (Instance 0) ===${NC}'; \
-echo 'Starting PX4 instance 0 with camera model...'; \
-export LIBGL_ALWAYS_SOFTWARE=1; \
+# Terminal 2: Ally Drone (Instance 0) - First vehicle starts Gazebo
+echo -e "${BLUE}Starting Terminal 2: Ally Drone (Instance $ALLY_INSTANCE)...${NC}"
+ALLY_CMD="echo -e '${GREEN}=== Ally Drone (Instance $ALLY_INSTANCE) ===${NC}'; \
+echo 'Starting PX4 instance $ALLY_INSTANCE with custom camera model (will start Gazebo)...'; \
 cd $PX4_DIR && \
-mkdir -p $PX4_DIR/build/px4_sitl_default/instance_0 && \
-cd $PX4_DIR/build/px4_sitl_default/instance_0 && \
-export PX4_SYS_AUTOSTART=4001; \
-export PX4_GZ_MODEL_POSE='0,2,0,0,0,4.71'; \
-export PX4_SIM_MODEL=gz_x500_mono_cam; \
-export PX4_INSTANCE=0; \
-export MAV_BROADCAST=1; \
-export PX4_MICRODDS_NS='px4_0'; \
-export UXRCE_DDS_UDP_PORT=8888; \
-$PX4_DIR/build/px4_sitl_default/bin/px4 -i 0"
-open_terminal "Ally Drone (Instance 0)" "$ALLY_CMD" "$BLUE"
+PX4_SYS_AUTOSTART=$PX4_AUTOSTART \
+PX4_GZ_SIM_RENDER_ENGINE=$PX4_GZ_SIM_RENDER_ENGINE \
+PX4_SIM_MODEL=$ALLY_MODEL \
+PX4_GZ_WORLD=$GZ_WORLD \
+PX4_GZ_MODEL_POSE='$ALLY_POSITION' \
+./build/px4_sitl_default/bin/px4 -i $ALLY_INSTANCE"
+open_terminal "Ally Drone (Instance $ALLY_INSTANCE)" "$ALLY_CMD" "$BLUE"
 
 # Wait for Gazebo to start
 echo -e "${YELLOW}Waiting for Gazebo to initialize...${NC}"
 sleep 15
 
-# Terminal 3: Enemy Drone (Instance 1)
-echo -e "${BLUE}Starting Terminal 3: Enemy Drone (Instance 1)...${NC}"
-ENEMY_CMD="echo -e '${RED}=== Enemy Drone (Instance 1) ===${NC}'; \
-echo 'Starting PX4 instance 1...'; \
-export LIBGL_ALWAYS_SOFTWARE=1; \
+# Terminal 3: Enemy Drone (Instance 1) - Standalone mode
+echo -e "${BLUE}Starting Terminal 3: Enemy Drone (Instance $ENEMY_INSTANCE)...${NC}"
+ENEMY_CMD="echo -e '${RED}=== Enemy Drone (Instance $ENEMY_INSTANCE) ===${NC}'; \
+echo 'Starting PX4 instance $ENEMY_INSTANCE in standalone mode...'; \
 cd $PX4_DIR && \
-mkdir -p $PX4_DIR/build/px4_sitl_default/instance_1 && \
-cd $PX4_DIR/build/px4_sitl_default/instance_1 && \
-PX4_GZ_WORLD=default \
 PX4_GZ_STANDALONE=1 \
-PX4_GZ_MODEL=x500_1 \
-PX4_SYS_AUTOSTART=4001 \
-PX4_GZ_MODEL_POSE='0,-2,0,0,0,0' \
+PX4_GZ_SIM_RENDER_ENGINE=$PX4_GZ_SIM_RENDER_ENGINE \
+PX4_SYS_AUTOSTART=$PX4_AUTOSTART \
+PX4_GZ_MODEL_POSE='$ENEMY_POSITION' \
+PX4_GZ_WORLD=$GZ_WORLD \
 PX4_SIM_MODEL=gz_x500 \
-PX4_MICRODDS_NS='px4_1' \
-UXRCE_DDS_UDP_PORT=8889 \
-$PX4_DIR/build/px4_sitl_default/bin/px4 -i 1"
-open_terminal "Enemy Drone (Instance 1)" "$ENEMY_CMD" "$RED"
+./build/px4_sitl_default/bin/px4 -i $ENEMY_INSTANCE"
+open_terminal "Enemy Drone (Instance $ENEMY_INSTANCE)" "$ENEMY_CMD" "$RED"
 
 # Wait for second drone to initialize
 sleep 5
@@ -142,44 +169,73 @@ sleep 5
 echo -e "${BLUE}Starting Terminal 4: Camera Bridge...${NC}"
 BRIDGE_CMD="echo -e '${YELLOW}=== Camera Bridge ===${NC}'; \
 echo 'Starting ROS2 camera bridge...'; \
-source /opt/ros/humble/setup.bash; \
-source $WS_ROS2/install/setup.bash; \
-export LIBGL_ALWAYS_SOFTWARE=1; \
+source $ROS_SETUP; \
+source $WS_SETUP; \
 ros2 run ros_gz_bridge parameter_bridge \
-/world/default/model/x500_mono_cam_0/link/camera_link/sensor/imager/image@sensor_msgs/msg/Image@gz.msgs.Image \
-/world/default/model/x500_mono_cam_0/link/camera_link/sensor/imager/camera_info@sensor_msgs/msg/CameraInfo@gz.msgs.CameraInfo \
+/world/$GZ_WORLD/model/$GAZEBO_MODEL_NAME/link/camera_link/sensor/imager/image@sensor_msgs/msg/Image@gz.msgs.Image \
+/world/$GZ_WORLD/model/$GAZEBO_MODEL_NAME/link/camera_link/sensor/imager/camera_info@sensor_msgs/msg/CameraInfo@gz.msgs.CameraInfo \
 --ros-args \
--r /world/default/model/x500_mono_cam_0/link/camera_link/sensor/imager/image:=/camera/image \
--r /world/default/model/x500_mono_cam_0/link/camera_link/sensor/imager/camera_info:=/camera/camera_info"
+-r /world/$GZ_WORLD/model/$GAZEBO_MODEL_NAME/link/camera_link/sensor/imager/image:=/camera/image \
+-r /world/$GZ_WORLD/model/$GAZEBO_MODEL_NAME/link/camera_link/sensor/imager/camera_info:=/camera/camera_info"
 open_terminal "Camera Bridge" "$BRIDGE_CMD" "$YELLOW"
 
-# Terminal 5: RViz2 Visualization
-echo -e "${BLUE}Starting Terminal 5: RViz2 Visualization...${NC}"
-RVIZ_CMD="echo -e '${GREEN}=== RViz2 Visualization ===${NC}'; \
-echo 'Starting RViz2 for trajectory visualization...'; \
-source /opt/ros/humble/setup.bash; \
-source $WS_ROS2/install/setup.bash; \
-export LIBGL_ALWAYS_SOFTWARE=1; \
-ros2 run rviz2 rviz2"
-open_terminal "RViz2" "$RVIZ_CMD" "$GREEN"
+# Terminal 5: Detection Node (NEW)
+echo -e "${CYAN}Starting Terminal 5: Detection Node (YOLOv11n)...${NC}"
+# Build detection command with debug parameter if enabled
+if [ "$DEBUG_MODE" = true ]; then
+    DEBUG_PARAM="--ros-args -p debug:=true"
+    DEBUG_INFO="echo '  - /debug/ally/detection_image: Annotated camera feed (DEBUG MODE)';"
+else
+    DEBUG_PARAM=""
+    DEBUG_INFO="echo '  - Debug images disabled (use --debug flag to enable)';"
+fi
+DETECTION_CMD="echo -e '${CYAN}=== Detection Node (YOLOv11n) ===${NC}'; \
+echo -e '${YELLOW}Starting drone detection with YOLOv11n...${NC}'; \
+echo ''; \
+echo 'Detection outputs:'; \
+echo '  - /enemy/detection: Bounding box coordinates'; \
+$DEBUG_INFO \
+echo ''; \
+source $ROS_SETUP; \
+source $WS_SETUP; \
+echo -e '${GREEN}Detection node starting...${NC}'; \
+ros2 run halcon1_detection detection_node $DEBUG_PARAM"
+open_terminal "Detection Node" "$DETECTION_CMD" "$CYAN"
 
-# Terminal 6: Enemy Movement Control (waits for user)
-echo -e "${BLUE}Starting Terminal 6: Enemy Movement Control...${NC}"
+# Terminal 6: Tracking Node (NEW)
+echo -e "${MAGENTA}Starting Terminal 6: Tracking Node...${NC}"
+TRACKING_CMD="echo -e '${MAGENTA}=== Tracking Node ===${NC}'; \
+echo -e '${YELLOW}Starting coordinate transformation for world tracking...${NC}'; \
+echo ''; \
+echo 'Tracking inputs/outputs:'; \
+echo '  - Subscribes to: /enemy/detection (from Detection Node)'; \
+echo '  - Subscribes to: /fmu/out/vehicle_odometry (friendly drone pose)'; \
+echo '  - Publishes to: /enemy/pose (world coordinates)'; \
+echo ''; \
+source $ROS_SETUP; \
+source $WS_SETUP; \
+echo -e '${GREEN}Tracking node starting...${NC}'; \
+ros2 run halcon1_tracking tracking_node"
+open_terminal "Tracking Node" "$TRACKING_CMD" "$MAGENTA"
+
+# RViz2 will be started directly in this terminal at the end (not in separate terminal)
+
+# Terminal 8: Enemy Movement Control (waits for user)
+echo -e "${BLUE}Starting Terminal 8: Enemy Movement Control...${NC}"
 ENEMY_CONTROL_CMD="echo -e '${RED}=== Enemy Movement Control ===${NC}'; \
 echo -e '${YELLOW}Ready to start enemy offboard control.${NC}'; \
 echo -e '${GREEN}Press ENTER when ready to launch enemy movement...${NC}'; \
 read; \
 echo 'Starting enemy offboard control...'; \
-source /opt/ros/humble/setup.bash; \
-source $WS_ROS2/install/setup.bash; \
-export LIBGL_ALWAYS_SOFTWARE=1; \
+source $ROS_SETUP; \
+source $WS_SETUP; \
 cd $WS_ROS2; \
 ros2 run multi_drone_sim enemy_offboard_control"
 open_terminal "Enemy Movement Control" "$ENEMY_CONTROL_CMD" "$RED"
 
-# Terminal 7 (if debug mode): PX4 Debug Translator
+# Terminal 9 (if debug mode): PX4 Debug Translator
 if [ "$DEBUG_MODE" = true ]; then
-    echo -e "${BLUE}Starting Terminal 7: PX4 Debug Translator...${NC}"
+    echo -e "${BLUE}Starting Terminal 9: PX4 Debug Translator...${NC}"
     DEBUG_CMD="echo -e '${MAGENTA}=== PX4 Debug Translator ===${NC}'; \
     echo 'Translating PX4 topics to ROS2 standard types for visualization...'; \
     echo ''; \
@@ -191,26 +247,79 @@ if [ "$DEBUG_MODE" = true ]; then
     echo '  /debug/enemy/path (Path)'; \
     echo '  /debug/enemy/setpoint (PoseStamped)'; \
     echo ''; \
-    source /opt/ros/humble/setup.bash; \
-    source $WS_ROS2/install/setup.bash; \
-    export LIBGL_ALWAYS_SOFTWARE=1; \
-    ros2 run multi_drone_sim px4_debug_translator"
+    source $ROS_SETUP; \
+    source $WS_SETUP; \
+    ros2 run multi_drone_sim px4_debug_translator \
+    --ros-args \
+    -p enemy_offset_x:=${ENEMY_X}.0 \
+    -p enemy_offset_y:=${ENEMY_Y}.0 \
+    -p enemy_offset_z:=${ENEMY_Z}.0"
     open_terminal "PX4 Debug Translator" "$DEBUG_CMD" "$MAGENTA"
 fi
 
-echo -e "${GREEN}=== All terminals launched ===${NC}"
+echo -e "${GREEN}=== All background terminals launched ===${NC}"
 echo -e "${YELLOW}Terminal Summary:${NC}"
-echo -e "  1. ${GREEN}MicroXRCE Agent${NC} - UDP ports 8888 (drone 0) and 8889 (drone 1)"
+echo -e "  1. ${GREEN}MicroXRCE Agent${NC} - UDP port 8888 (all drones)"
 echo -e "  2. ${BLUE}Ally Drone${NC} - Instance 0 with camera"
 echo -e "  3. ${RED}Enemy Drone${NC} - Instance 1"
 echo -e "  4. ${YELLOW}Camera Bridge${NC} - ROS2 topic bridge"
-echo -e "  5. ${GREEN}RViz2${NC} - 3D visualization of drone trajectories"
-echo -e "  6. ${RED}Enemy Movement${NC} - Press ENTER in that terminal to start"
+echo -e "  5. ${CYAN}Detection Node${NC} - YOLOv11n drone detection"
+echo -e "  6. ${MAGENTA}Tracking Node${NC} - Coordinate transformation to world frame"
+echo -e "  7. ${RED}Enemy Movement${NC} - Press ENTER in that terminal to start"
 if [ "$DEBUG_MODE" = true ]; then
-    echo -e "  7. ${MAGENTA}PX4 Debug Translator${NC} - Converting PX4 to ROS2 visualization topics"
+    echo -e "  8. ${MAGENTA}PX4 Debug Translator${NC} - Converting PX4 to ROS2 visualization topics"
 fi
 echo ""
-echo -e "${YELLOW}Usage:${NC}"
-echo -e "  Normal mode: ./launch_multi_terminal.sh"
-echo -e "  Debug mode:  ./launch_multi_terminal.sh --debug"
+echo -e "${CYAN}Detection Node Info:${NC}"
+echo -e "  - Subscribes to: /camera/image"
+echo -e "  - Publishes detections to: /enemy/detection"
+if [ "$DEBUG_MODE" = true ]; then
+    echo -e "  - Publishes annotated images to: /debug/ally/detection_image (DEBUG MODE)"
+else
+    echo -e "  - Annotated images disabled (use --debug flag to enable)"
+fi
+echo -e "  - Model: YOLOv11n (will download on first run)"
 echo ""
+echo -e "${MAGENTA}Tracking Node Info:${NC}"
+echo -e "  - Subscribes to: /enemy/detection (bounding boxes)"
+echo -e "  - Subscribes to: /fmu/out/vehicle_odometry (friendly pose)"
+echo -e "  - Publishes to: /enemy/pose (world coordinates)"
+echo ""
+echo -e "${YELLOW}Usage:${NC}"
+echo -e "  Normal mode: ./launch_multi_terminal_with_detection.sh"
+echo -e "  Debug mode:  ./launch_multi_terminal_with_detection.sh --debug"
+echo ""
+echo -e "${GREEN}To view results in RViz2:${NC}"
+if [ "$DEBUG_MODE" = true ]; then
+    echo -e "  Detection (DEBUG MODE):"
+    echo -e "    1. Add an Image display"
+    echo -e "    2. Set the topic to /debug/ally/detection_image"
+    echo -e "    3. You should see bounding boxes around detected objects"
+else
+    echo -e "  Detection:"
+    echo -e "    (Run with --debug flag to enable annotated image visualization)"
+fi
+echo -e "  Tracking:"
+echo -e "    1. Add a Pose display"
+echo -e "    2. Set the topic to /enemy/pose"
+echo -e "    3. You should see the enemy position in world coordinates"
+echo ""
+echo -e "${GREEN}=== Starting RViz2 in this terminal ===${NC}"
+echo -e "${YELLOW}RViz2 will launch now. Close RViz2 to stop the simulation.${NC}"
+echo ""
+sleep 2
+
+# Start RViz2 directly in this terminal (not in a separate window)
+source $ROS_SETUP
+source $WS_SETUP
+ros2 run rviz2 rviz2
+
+# Cleanup when RViz2 is closed
+echo ""
+echo -e "${YELLOW}RViz2 closed. Cleaning up processes...${NC}"
+pkill -f px4
+pkill -f MicroXRCEAgent
+pkill -f gz
+pkill -f detection_node
+pkill -f tracking_node
+echo -e "${GREEN}Cleanup complete.${NC}"

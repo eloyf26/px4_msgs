@@ -9,6 +9,7 @@
   <depend>rclpy</depend>
   <depend>halcon1_msgs</depend>
   <depend>halcon1_types</depend>
+  <depend>halcon1_utils</depend>
   <depend>px4_msgs</depend>
   <depend>std_msgs</depend>
 

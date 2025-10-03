@@ -94,9 +94,15 @@ fi
 export GZ_VERSION=harmonic # Required for building ros_gz in step 10
 echo "✓ GZ_VERSION=harmonic exported"
 
-# Install rqt_image_view for visualizing camera images
+# Install rqt_image_view and cv_bridge for visualizing camera images
 sudo apt update
-sudo apt install -y ros-humble-rqt-image-view
+sudo apt install -y ros-humble-rqt-image-view ros-humble-cv-bridge
+
+# Install Python dependencies system-wide for detection node
+echo "→ Installing Python dependencies for detection node..."
+pip3 install --upgrade pip
+pip3 install -r ws_ros2/src/Halcon1/modules/halcon1_detection/requirements.txt
+echo "✓ Python dependencies installed system-wide"
 
 # 9. Build ROS2 workspace
 echo "→ Installing ROS2 build tools..."

@@ -4,8 +4,14 @@ from rclpy.qos import QoSProfile, ReliabilityPolicy, DurabilityPolicy, HistoryPo
 from halcon1_msgs.msg import DroneDetection
 from geometry_msgs.msg import PoseStamped
 from px4_msgs.msg import VehicleOdometry
-from halcon1_tracking.coordinate_transform import CoordinateTransform
+from halcon1_utils import CoordinateTransform
 from halcon1_types import DronePose
+from sensor_msgs.msg import CameraInfo
+from halcon1_tracking.camera_transform import (
+    CameraIntrinsics,
+    camera_to_world_coordinates,
+    parse_camera_intrinsics
+)
 
 class TrackingNode(Node):
     def __init__(self):
@@ -29,37 +35,81 @@ class TrackingNode(Node):
         self.friendly_sub = self.create_subscription(
             VehicleOdometry, '/fmu/out/vehicle_odometry',
             self.friendly_callback, qos_profile)
+        self.camera_info_sub = self.create_subscription(
+            CameraInfo, '/camera/camera_info',
+            self.camera_info_callback, 10)
 
-        # Coordinate transform
-        self.transform = CoordinateTransform()
+        # Camera intrinsics
+        self.camera_intrinsics = None
+        self.last_intrinsic_update = None
+
+        # Enemy drone dimensions for depth estimation
+        # TODO: Should be ros2 parameters
+        self.enemy_drone_width = 0.5
+        self.enemy_drone_height = 0.2
 
         # State
         self.friendly_pose = None
+        self.friendly_orientation = None
 
         self.get_logger().info('Tracking node initialized - waiting for detections and friendly pose...')
 
     def friendly_callback(self, msg):
-        """Update friendly drone pose from PX4 odometry (includes orientation)"""
-        # Store full pose with position and orientation
-        self.friendly_pose = DronePose(
-            x=msg.position[0],
-            y=msg.position[1],
-            z=msg.position[2]
-        )
-        # Note: VehicleOdometry also contains quaternion in msg.q for future use
+        """Update friendly drone pose and orientation from PX4 odometry."""
+        # Transform position from NED to ENU
+        self.friendly_pose = CoordinateTransform.ned_to_enu_local_frame(msg.position)
+
+        # Reorder PX4 quaternion from [w,x,y,z] to [x,y,z,w]
+        q_px4_wxyz = list(msg.q)
+        q_px4_xyzw = [q_px4_wxyz[1], q_px4_wxyz[2], q_px4_wxyz[3], q_px4_wxyz[0]]
+
+        # Transform orientation from PX4 (FRD-to-NED) to ROS2 (FLU-to-ENU)
+        self.friendly_orientation = CoordinateTransform.px4_to_ros_orientation(q_px4_xyzw)
+
+    def camera_info_callback(self, msg):
+        """Update the camera intrinsic parameters from CameraInfo message"""
+        # We don't want to update intrinsics every time because they should be constant. We will only do it every 5 seconds
+        if self.last_intrinsic_update is not None:
+            if (self.get_clock().now() - self.last_intrinsic_update).nanoseconds < 5e9:
+                return  # 5 seconds
+        self.last_intrinsic_update = self.get_clock().now()
+
+        self.camera_intrinsics = parse_camera_intrinsics(msg, self.get_logger())
 
     def detection_callback(self, msg):
         """Process enemy detection and transform to world coordinates"""
-        # Need friendly pose to do coordinatrie transformation
+        # Need friendly pose and orientation for coordinate transformation
         if self.friendly_pose is None:
-            self.get_logger().info('No friendly pose available for coordinate transformation')
+            self.get_logger().info('No friendly pose/orientation available, skipping detection processing')
             return
 
-        # Create a DroneDetection-like object to pass to coordinate transform
-        # (We need to import/create the DetectionResult type, but for now using the message directly)
+        if self.last_intrinsic_update is None:
+            self.get_logger().info('No camera intrinsics available, skipping detection processing')
+            return
 
-        # Use the coordinate transform to convert to world coordinates
-        enemy_world_pose = self.transform.camera_to_world_coordinates(msg, self.friendly_pose)
+        # Log detection values for debugging
+        self.get_logger().info(f'Detection received: x={msg.x}, y={msg.y}, width={msg.width}, height={msg.height}')
+
+        # Validate detection data
+        if msg.width <= 0 or msg.height <= 0:
+            self.get_logger().error(f'Invalid detection dimensions: width={msg.width}, height={msg.height}. '
+                                   f'Full detection: x={msg.x}, y={msg.y}, width={msg.width}, height={msg.height}')
+            self.get_logger().error('Skipping coordinate transformation due to invalid detection')
+            return
+
+        enemy_world_pose = camera_to_world_coordinates(
+            msg,
+            self.friendly_pose,
+            self.friendly_orientation,
+            self.camera_intrinsics,
+            self.enemy_drone_width,
+            self.enemy_drone_height,
+            self.get_logger()
+        )
+
+        if not enemy_world_pose:
+            self.get_logger().error('Coordinate transformation failed, skipping publishing')
+            return
 
         # Create and publish PoseStamped message
         pose_msg = PoseStamped()
@@ -78,6 +128,7 @@ class TrackingNode(Node):
         pose_msg.pose.orientation.w = 1.0
 
         self.enemy_pose_pub.publish(pose_msg)
+
 
 def main():
     rclpy.init()
