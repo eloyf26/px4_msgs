@@ -182,12 +182,12 @@ cd ~/AirSimEnvironments
 # Download Blocks environment (recommended for testing - ~2GB)
 wget https://github.com/microsoft/AirSim/releases/download/v1.8.1/Blocks.zip
 
-# Extract
+# Extract (creates LinuxBlocks1.8.1 directory)
 unzip Blocks.zip
 
 # Test that it runs
-cd Blocks
-./LinuxBlocks.sh
+cd LinuxBlocks1.8.1/LinuxNoEditor
+./Blocks.sh
 ```
 
 **Note**: First launch may take a few minutes. You should see an Unreal Engine window with a simple environment and "Waiting for connection..." message.
@@ -240,8 +240,8 @@ Once installation is complete (Steps 1-3 above), run the system:
 
 **Terminal 1: Start AirSim Environment**
 ```bash
-cd ~/AirSimEnvironments/Blocks
-./LinuxBlocks.sh
+cd ~/AirSimEnvironments/LinuxBlocks1.8.1/LinuxNoEditor
+./Blocks.sh
 # Wait for Unreal Engine to load (~30 seconds)
 # You should see "Waiting for connection..." in AirSim HUD
 ```
