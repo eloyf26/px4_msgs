@@ -1,8 +1,11 @@
-# Halcon1 System Architecture and Development Plan
+# Halcon1 System Development Plan
+
+> **Note**: System architecture documentation has been moved to [README.md](README.md).
+> This file contains the implementation plan and will be deleted once Phase 1 is complete.
 
 ## Overview
 
-This document outlines the architecture of the Halcon1 autonomous drone interception system and the plan to support multiple simulation environments (Gazebo, AirSim) while maintaining compatibility with real hardware deployment.
+This document outlines the implementation plan to support multiple simulation environments (Gazebo, AirSim) while maintaining compatibility with real hardware deployment.
 
 ## Table of Contents
 

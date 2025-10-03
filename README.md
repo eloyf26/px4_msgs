@@ -9,6 +9,78 @@ Halcon1 implements a three-stage pipeline for autonomous drone interception:
 
 This repository contains all components needed to run the complete system, including simulation, communication bridges, and the processing pipeline.
 
+## System Architecture
+
+### Core Principle: PX4 is Simulator-Agnostic
+
+Halcon1 uses **PX4** as the flight controller software, which works identically across:
+- **Gazebo simulation** (default)
+- **AirSim simulation** (Unreal Engine)
+- **Real hardware** (Pixhawk flight controller)
+
+**Key insight**: PX4 doesn't care what simulator is running. It only needs:
+1. **Sensor data IN** (IMU, GPS, barometer, camera, etc.)
+2. **Motor commands OUT** (PWM signals to motors)
+
+### Communication Architecture
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│ SIMULATOR (Gazebo OR AirSim) OR REAL HARDWARE                   │
+│  - Simulates/provides sensor data (IMU, GPS, Barometer, Camera) │
+│  - Simulates/executes motor commands                             │
+└────────────┬────────────────────────────────────┬───────────────┘
+             │                                    │
+             │ MAVLink Protocol                   │ Camera Topics
+             │ (sensor data → PX4)                │ (via bridge)
+             │ (motor commands ← PX4)             │
+             ↓                                    ↓
+┌─────────────────────────────┐     ┌──────────────────────────────┐
+│ PX4 (SITL or Real)          │     │ Camera Bridge                │
+│  - Flight controller        │     │  - ros_gz_bridge (Gazebo)    │
+│  - Attitude/position ctrl   │     │  - airsim_ros_pkgs (AirSim)  │
+│  - Mission planning         │     │  - cv_camera (Real)          │
+└─────────────┬───────────────┘     └──────────────────────────────┘
+              │                                   │
+              │ uXRCE-DDS (UDP 8888)             │
+              │ PX4 uORB ↔ ROS2 DDS              │
+              ↓                                   ↓
+┌─────────────────────────────┐                  │
+│ MicroXRCE-DDS Agent         │                  │
+│  - Translates PX4 ↔ ROS2    │                  │
+└─────────────┬───────────────┘                  │
+              │                                   │
+              ↓                                   ↓
+┌──────────────────────────────────────────────────────────────────┐
+│ ROS2 Topics (IDENTICAL across all environments!)                │
+│  - /fmu/out/vehicle_odometry (pose, velocity from PX4)          │
+│  - /fmu/in/trajectory_setpoint (commands to PX4)                │
+│  - /camera/image (camera feed)                                  │
+└────────────┬─────────────────────────────────────────────────────┘
+             │
+             ↓
+┌──────────────────────────────────────────────────────────────────┐
+│ Halcon1 ROS2 Nodes (SAME CODE for all environments!)           │
+│  - halcon1_detection: YOLO drone detection                      │
+│  - halcon1_tracking: Camera-to-world coordinate transform       │
+│  - halcon1_guidance: Kalman Filter + Proportional Navigation    │
+└──────────────────────────────────────────────────────────────────┘
+```
+
+### What Changes Between Environments?
+
+| Component | Gazebo | AirSim | Real Hardware |
+|-----------|--------|--------|---------------|
+| **Physics/Sensors** | Gazebo engine | Unreal Engine + PhysX | Real sensors |
+| **MAVLink Port** | UDP 14560 | TCP 4560 | Serial/WiFi |
+| **Camera Bridge** | ros_gz_bridge | airsim_ros_pkgs | cv_camera/usb_cam |
+| **PX4 Binary** | ✅ Same | ✅ Same | Real firmware |
+| **MicroXRCE Agent** | ✅ Same | ✅ Same | ✅ Same |
+| **ROS2 Topics** | ✅ Same | ✅ Same | ✅ Same |
+| **Halcon1 Nodes** | ✅ Same | ✅ Same | ✅ Same |
+
+**This means**: Your detection, tracking, and guidance code works identically in simulation and real hardware!
+
 ## Quick Start
 
 ### Single Drone Simulation
@@ -96,48 +168,106 @@ Halcon1 also supports **AirSim + Unreal Engine** as an alternative simulation en
 - **PhysX physics**: NVIDIA's physics engine
 - **Same Halcon1 code**: No changes to detection/tracking/guidance nodes
 
-#### Prerequisites
+#### Installation
 
-1. **AirSim Environment** (choose one):
-   - Download prebuilt binary: [AirSim Releases](https://github.com/microsoft/AirSim/releases)
-   - Recommended: Blocks environment (lightweight, good for testing)
+**Step 1: Install AirSim Prebuilt Environment**
 
-2. **airsim_ros_pkgs**: ROS2 wrapper for AirSim
-   ```bash
-   cd ws_ros2/src
-   git clone https://github.com/microsoft/airsim_ros_pkgs.git
-   cd ../..
-   colcon build --packages-select airsim_ros_pkgs
-   ```
+Download a prebuilt Unreal Engine + AirSim binary (no compilation needed):
+
+```bash
+# Create directory for AirSim environments
+mkdir -p ~/AirSimEnvironments
+cd ~/AirSimEnvironments
+
+# Download Blocks environment (recommended for testing - ~2GB)
+wget https://github.com/microsoft/AirSim/releases/download/v1.8.1/Blocks.zip
+
+# Extract
+unzip Blocks.zip
+
+# Test that it runs
+cd Blocks
+./LinuxBlocks.sh
+```
+
+**Note**: First launch may take a few minutes. You should see an Unreal Engine window with a simple environment and "Waiting for connection..." message.
+
+**Alternative environments** (for more realistic scenarios):
+- [Landscape Mountains](https://github.com/microsoft/AirSim/releases/download/v1.8.1/LandscapeMountains.zip) (~5GB)
+- [City Environment](https://github.com/microsoft/AirSim/releases/download/v1.8.1/CityEnviron.zip) (~8GB)
+- [Building 99](https://github.com/Microsoft/AirSim/releases/download/v1.2.0/Building_99.zip) (~1.5GB)
+
+**Step 2: Install airsim_ros_pkgs (ROS2 Bridge)**
+
+Clone and build the AirSim ROS2 wrapper:
+
+```bash
+cd /home/eloyfernandez/drone_ws/halcon1-system/ws_ros2/src
+
+# Clone airsim_ros_pkgs
+git clone https://github.com/microsoft/airsim_ros_pkgs.git
+
+# Build
+cd /home/eloyfernandez/drone_ws/halcon1-system/ws_ros2
+source /opt/ros/humble/setup.bash
+colcon build --packages-select airsim_ros_pkgs
+
+# If build fails due to missing dependencies, install:
+sudo apt install ros-humble-tf2-ros ros-humble-tf2-geometry-msgs
+```
+
+**Step 3: Configure AirSim for PX4**
+
+Copy the Halcon1 AirSim configuration:
+
+```bash
+# Create AirSim config directory
+mkdir -p ~/Documents/AirSim
+
+# Copy PX4Multirotor configuration
+cp config/airsim/settings.json ~/Documents/AirSim/
+
+# Verify the file is in the correct location
+cat ~/Documents/AirSim/settings.json | grep PX4Multirotor
+# Should output: "VehicleType": "PX4Multirotor",
+```
+
+**Important**: This configuration uses `PX4Multirotor` (not `SimpleFlight`) so that PX4 controls the ally drone, just like in Gazebo.
 
 #### Quick Start with AirSim
 
-1. **Configure AirSim**:
-   ```bash
-   # Copy configuration to AirSim directory
-   mkdir -p ~/Documents/AirSim
-   cp config/airsim/settings.json ~/Documents/AirSim/
-   ```
+Once installation is complete (Steps 1-3 above), run the system:
 
-2. **Start AirSim environment**:
-   ```bash
-   # Example: Blocks environment
-   cd ~/AirSimEnvironments/Blocks
-   ./LinuxBlocks.sh
-   ```
+**Terminal 1: Start AirSim Environment**
+```bash
+cd ~/AirSimEnvironments/Blocks
+./LinuxBlocks.sh
+# Wait for Unreal Engine to load (~30 seconds)
+# You should see "Waiting for connection..." in AirSim HUD
+```
 
-3. **Launch Halcon1 with AirSim**:
-   ```bash
-   ./scripts/launch_airsim.sh
-   ```
+**Terminal 2: Launch Halcon1 System**
+```bash
+cd /home/eloyfernandez/drone_ws/halcon1-system
+./scripts/launch_airsim.sh
+```
 
-This launches 6 terminals:
-1. **MicroXRCE Agent** - Same as Gazebo (UDP 8888)
-2. **PX4 SITL** - Connects to AirSim via TCP 4560
-3. **AirSim ROS Bridge** - Camera and sensor topics
-4. **Detection Node** - YOLOv11n (unchanged)
-5. **Tracking Node** - Coordinate transform (unchanged)
-6. **Guidance Node** - Kalman Filter + ProNav (unchanged)
+This automatically launches 6 terminals:
+- MicroXRCE Agent (PX4 ↔ ROS2 bridge)
+- PX4 SITL (flight controller, connects to AirSim)
+- AirSim ROS Bridge (camera topics)
+- Detection Node (YOLOv11n)
+- Tracking Node (coordinate transform)
+- Guidance Node (Kalman Filter + ProNav)
+
+**Terminal 3: Control the Drone**
+
+Use QGroundControl (should auto-connect):
+```bash
+# Or use PX4 console commands:
+commander arm
+commander takeoff
+```
 
 #### AirSim vs Gazebo Comparison
 
@@ -169,11 +299,13 @@ This launches 6 terminals:
   client.takeoffAsync(vehicle_name="Enemy").join()
   ```
 
-#### Detailed Setup Guide
+#### Additional Resources
 
-For detailed AirSim installation and configuration instructions, see:
-- **Architecture Details**: [PLAN.md](PLAN.md)
-- **Configuration Guide**: [config/airsim/README.md](config/airsim/README.md)
+For advanced configuration and troubleshooting:
+- **AirSim Configuration Details**: [config/airsim/README.md](config/airsim/README.md)
+  - Camera settings customization
+  - Multi-drone setup
+  - Troubleshooting common issues
 
 ### Visualization
 
