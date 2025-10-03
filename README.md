@@ -193,9 +193,11 @@ cd LinuxBlocks1.8.1/LinuxNoEditor
 **Note**: First launch may take a few minutes. You should see an Unreal Engine window with a simple environment and "Waiting for connection..." message.
 
 **Alternative environments** (for more realistic scenarios):
-- [Landscape Mountains](https://github.com/microsoft/AirSim/releases/download/v1.8.1/LandscapeMountains.zip) (~5GB)
-- [City Environment](https://github.com/microsoft/AirSim/releases/download/v1.8.1/CityEnviron.zip) (~8GB)
-- [Building 99](https://github.com/Microsoft/AirSim/releases/download/v1.2.0/Building_99.zip) (~1.5GB)
+- [Landscape Mountains](https://github.com/microsoft/AirSim/releases/download/v1.8.1/LandscapeMountains.zip) (~5GB) - Extract to `LinuxLandscapeMountains1.8.1/LinuxNoEditor`
+- [City Environment](https://github.com/microsoft/AirSim/releases/download/v1.8.1/CityEnviron.zip) (~8GB) - Extract to `LinuxCityEnviron1.8.1/LinuxNoEditor`
+- [Building 99](https://github.com/Microsoft/AirSim/releases/download/v1.2.0/Building_99.zip) (~1.5GB) - Extract to `LinuxBuilding991.2.0/LinuxNoEditor`
+
+**Note**: All environments follow the pattern `Linux<EnvironmentName><Version>/LinuxNoEditor/<ScriptName>.sh`
 
 **Step 2: Install airsim_ros_pkgs (ROS2 Bridge)**
 
