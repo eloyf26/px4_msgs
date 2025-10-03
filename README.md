@@ -84,6 +84,97 @@ To stop all running processes and terminals:
 ```
 This script kills all PX4, Gazebo, MicroXRCE agents, and ROS2 nodes.
 
+### AirSim Simulation (Alternative to Gazebo)
+
+Halcon1 also supports **AirSim + Unreal Engine** as an alternative simulation environment. AirSim provides photo-realistic graphics and high-fidelity physics simulation.
+
+#### Why Use AirSim?
+
+- **Photo-realistic environments**: Unreal Engine 4/5 graphics
+- **Custom environments**: Cities, buildings, complex terrain
+- **Better camera simulation**: Realistic lighting, shadows, reflections
+- **PhysX physics**: NVIDIA's physics engine
+- **Same Halcon1 code**: No changes to detection/tracking/guidance nodes
+
+#### Prerequisites
+
+1. **AirSim Environment** (choose one):
+   - Download prebuilt binary: [AirSim Releases](https://github.com/microsoft/AirSim/releases)
+   - Recommended: Blocks environment (lightweight, good for testing)
+
+2. **airsim_ros_pkgs**: ROS2 wrapper for AirSim
+   ```bash
+   cd ws_ros2/src
+   git clone https://github.com/microsoft/airsim_ros_pkgs.git
+   cd ../..
+   colcon build --packages-select airsim_ros_pkgs
+   ```
+
+#### Quick Start with AirSim
+
+1. **Configure AirSim**:
+   ```bash
+   # Copy configuration to AirSim directory
+   mkdir -p ~/Documents/AirSim
+   cp config/airsim/settings.json ~/Documents/AirSim/
+   ```
+
+2. **Start AirSim environment**:
+   ```bash
+   # Example: Blocks environment
+   cd ~/AirSimEnvironments/Blocks
+   ./LinuxBlocks.sh
+   ```
+
+3. **Launch Halcon1 with AirSim**:
+   ```bash
+   ./scripts/launch_airsim.sh
+   ```
+
+This launches 6 terminals:
+1. **MicroXRCE Agent** - Same as Gazebo (UDP 8888)
+2. **PX4 SITL** - Connects to AirSim via TCP 4560
+3. **AirSim ROS Bridge** - Camera and sensor topics
+4. **Detection Node** - YOLOv11n (unchanged)
+5. **Tracking Node** - Coordinate transform (unchanged)
+6. **Guidance Node** - Kalman Filter + ProNav (unchanged)
+
+#### AirSim vs Gazebo Comparison
+
+| Feature | Gazebo | AirSim |
+|---------|--------|--------|
+| **Graphics** | Ogre2 | Unreal Engine 4/5 |
+| **Physics** | ODE/Bullet | PhysX (NVIDIA) |
+| **Camera Quality** | Good | Photo-realistic |
+| **Performance** | Fast | Slower (GPU intensive) |
+| **Custom Environments** | SDF files | Unreal Editor |
+| **Setup Difficulty** | Easy | Moderate |
+| **Halcon1 Code Changes** | None | None |
+
+#### Controlling the Drones in AirSim
+
+**Ally Drone (PX4):**
+- Use QGroundControl (same as Gazebo)
+- Or PX4 console: `commander arm && commander takeoff`
+
+**Enemy Drone (SimpleFlight):**
+- Press `F1` in AirSim for keyboard control
+- Or use Python API:
+  ```python
+  import airsim
+  client = airsim.MultirotorClient()
+  client.confirmConnection()
+  client.enableApiControl(True, "Enemy")
+  client.armDisarm(True, "Enemy")
+  client.takeoffAsync(vehicle_name="Enemy").join()
+  ```
+
+#### Detailed Setup Guide
+
+For detailed AirSim installation and configuration instructions, see:
+- **Architecture Details**: [PLAN.md](PLAN.md)
+- **Configuration Guide**: [config/airsim/README.md](config/airsim/README.md)
+
 ### Visualization
 
 Monitor camera feed:
