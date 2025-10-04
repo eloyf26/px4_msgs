@@ -311,17 +311,22 @@ if [ "$DEBUG_MODE" = true ]; then
         ALLY_Y=$(grep -A 20 '"Ally"' "$AIRSIM_SETTINGS" | grep '"Y"' | head -1 | sed 's/.*: *\([0-9.-]*\).*/\1/')
         ALLY_Z=$(grep -A 20 '"Ally"' "$AIRSIM_SETTINGS" | grep '"Z"' | head -1 | sed 's/.*: *\([0-9.-]*\).*/\1/')
 
-        # Default to 0 if extraction failed
-        ALLY_X=${ALLY_X:-0}
-        ALLY_Y=${ALLY_Y:-0}
-        ALLY_Z=${ALLY_Z:-0}
+        # Default to 0.0 if extraction failed, ensure float format
+        ALLY_X=${ALLY_X:-0.0}
+        ALLY_Y=${ALLY_Y:-0.0}
+        ALLY_Z=${ALLY_Z:-0.0}
+
+        # Ensure values are floats (add .0 if they're integers)
+        [[ ! "$ALLY_X" =~ \. ]] && ALLY_X="${ALLY_X}.0"
+        [[ ! "$ALLY_Y" =~ \. ]] && ALLY_Y="${ALLY_Y}.0"
+        [[ ! "$ALLY_Z" =~ \. ]] && ALLY_Z="${ALLY_Z}.0"
 
         echo -e "${CYAN}Ally spawn position from settings.json: X=$ALLY_X, Y=$ALLY_Y, Z=$ALLY_Z${NC}"
     else
         echo -e "${YELLOW}Warning: AirSim settings.json not found, using default Ally spawn (0,0,0)${NC}"
-        ALLY_X=0
-        ALLY_Y=0
-        ALLY_Z=0
+        ALLY_X=0.0
+        ALLY_Y=0.0
+        ALLY_Z=0.0
     fi
 
     TRANSLATOR_CMD="echo -e '${MAGENTA}=== PX4 Debug Translator ===${NC}'; \

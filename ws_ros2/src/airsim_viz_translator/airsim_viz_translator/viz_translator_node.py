@@ -309,8 +309,10 @@ class AirSimVizTranslator(Node):
             return
 
         try:
-            # Get Enemy state from AirSim
-            state = self.airsim_client.getMultirotorState(vehicle_name=self.enemy_vehicle_name)
+            # Get Enemy pose from AirSim scene (use simGetObjectPose instead of getMultirotorState)
+            # simGetObjectPose returns the actual scene/visual position, which is correct even before physics init
+            # getMultirotorState returns physics position, which can be (0,0,0) for SimpleFlight before arming
+            enemy_pose = self.airsim_client.simGetObjectPose(self.enemy_vehicle_name)
 
             timestamp = self.get_clock().now().to_msg()
 
@@ -323,7 +325,7 @@ class AirSimVizTranslator(Node):
             # Enemy position is in AirSim global NED frame
             # PX4 local frame origin is at Ally's spawn position
             # So we need to subtract Ally's spawn offset to get position relative to PX4 origin
-            ned_pos = state.kinematics_estimated.position
+            ned_pos = enemy_pose.position
             enemy_pos_airsim_ned = [ned_pos.x_val, ned_pos.y_val, ned_pos.z_val]
 
             # Subtract Ally spawn offset to get position in PX4 local frame
@@ -341,7 +343,7 @@ class AirSimVizTranslator(Node):
             pose.pose.position.z = float(enu_pos.z)
 
             # Convert quaternion from NED to ENU
-            ned_quat = state.kinematics_estimated.orientation
+            ned_quat = enemy_pose.orientation
             # AirSim quaternion is [w, x, y, z], convert to [x, y, z, w] for our function
             q_ned_xyzw = [ned_quat.x_val, ned_quat.y_val, ned_quat.z_val, ned_quat.w_val]
             enu_quat = CoordinateTransform.px4_to_ros_orientation(q_ned_xyzw)
