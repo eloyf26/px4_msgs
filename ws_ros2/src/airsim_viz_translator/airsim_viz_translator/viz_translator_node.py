@@ -15,6 +15,7 @@ from nav_msgs.msg import Path, Odometry
 from std_msgs.msg import String, Int32
 from halcon1_utils import CoordinateTransform
 import math
+import airsim
 
 
 class AirSimVizTranslator(Node):
@@ -24,6 +25,43 @@ class AirSimVizTranslator(Node):
         super().__init__('airsim_viz_translator')
 
         self.get_logger().info('AirSim Visualization Translator starting...')
+
+        # Parameters
+        self.declare_parameter('host_ip', 'localhost')
+        self.declare_parameter('enemy_vehicle_name', 'Enemy')
+        self.declare_parameter('enemy_update_rate', 30.0)  # Hz
+        # Ally spawn position in AirSim NED coordinates (should match settings.json)
+        self.declare_parameter('ally_spawn_x', 0.0)
+        self.declare_parameter('ally_spawn_y', 0.0)
+        self.declare_parameter('ally_spawn_z', 0.0)
+
+        host_ip = self.get_parameter('host_ip').value
+        self.enemy_vehicle_name = self.get_parameter('enemy_vehicle_name').value
+        enemy_update_rate = self.get_parameter('enemy_update_rate').value
+
+        # Get Ally spawn offset (AirSim NED)
+        ally_spawn_ned = [
+            self.get_parameter('ally_spawn_x').value,
+            self.get_parameter('ally_spawn_y').value,
+            self.get_parameter('ally_spawn_z').value
+        ]
+
+        self.get_logger().info(f'Ally spawn position (AirSim NED): x={ally_spawn_ned[0]}, y={ally_spawn_ned[1]}, z={ally_spawn_ned[2]}')
+
+        # PX4 local frame origin is at Ally's spawn position in AirSim
+        # Enemy positions from AirSim need to be offset by Ally's spawn to align with PX4 frame
+        self.ally_spawn_offset_ned = ally_spawn_ned
+
+        # Connect to AirSim for Enemy ground truth
+        try:
+            self.get_logger().info(f'Connecting to AirSim at {host_ip} for Enemy ground truth...')
+            self.airsim_client = airsim.MultirotorClient(ip=host_ip)
+            self.airsim_client.confirmConnection()
+            self.airsim_connected = True
+            self.get_logger().info('Connected to AirSim successfully')
+        except Exception as e:
+            self.get_logger().warn(f'Failed to connect to AirSim: {e}. Enemy ground truth will not be available.')
+            self.airsim_connected = False
 
         # Configure QoS profile for PX4 topics
         self.px4_qos = QoSProfile(
@@ -44,7 +82,14 @@ class AirSimVizTranslator(Node):
         # Initialize path tracking
         self.ally_path = Path()
         self.ally_path.header.frame_id = 'world'
+        self.enemy_path = Path()
+        self.enemy_path.header.frame_id = 'world'
         self.max_path_length = 1000
+
+        # Timer for Enemy ground truth publishing
+        if self.airsim_connected:
+            timer_period = 1.0 / enemy_update_rate
+            self.enemy_timer = self.create_timer(timer_period, self.publish_enemy_ground_truth)
 
         # Subscribers to PX4 topics
         self.create_subscription(
@@ -68,7 +113,7 @@ class AirSimVizTranslator(Node):
             self.px4_qos
         )
 
-        # Publishers for RViz2-compatible topics
+        # Publishers for Ally drone RViz2-compatible topics
         self.pose_pub = self.create_publisher(
             PoseStamped, '/debug/ally/pose', self.ros_qos
         )
@@ -97,15 +142,31 @@ class AirSimVizTranslator(Node):
             Int32, '/debug/ally/nav_state', self.ros_qos
         )
 
+        # Publishers for Enemy drone RViz2-compatible topics
+        self.enemy_pose_pub = self.create_publisher(
+            PoseStamped, '/debug/enemy/pose', self.ros_qos
+        )
+
+        self.enemy_path_pub = self.create_publisher(
+            Path, '/debug/enemy/path', self.ros_qos
+        )
+
         self.get_logger().info('AirSim Visualization Translator initialized')
-        self.get_logger().info('Available RViz2 topics:')
-        self.get_logger().info('  - /debug/ally/pose (PoseStamped)')
-        self.get_logger().info('  - /debug/ally/velocity (TwistStamped)')
-        self.get_logger().info('  - /debug/ally/setpoint (PoseStamped)')
-        self.get_logger().info('  - /debug/ally/path (Path)')
-        self.get_logger().info('  - /debug/ally/odometry (Odometry)')
-        self.get_logger().info('  - /debug/ally/status (String)')
-        self.get_logger().info('  - /debug/ally/nav_state (Int32)')
+        self.get_logger().info('Available RViz2 DEBUG topics (ground truth):')
+        self.get_logger().info('  Ally Drone:')
+        self.get_logger().info('    - /debug/ally/pose (PoseStamped) - From PX4')
+        self.get_logger().info('    - /debug/ally/velocity (TwistStamped)')
+        self.get_logger().info('    - /debug/ally/setpoint (PoseStamped)')
+        self.get_logger().info('    - /debug/ally/path (Path)')
+        self.get_logger().info('    - /debug/ally/odometry (Odometry)')
+        self.get_logger().info('    - /debug/ally/status (String)')
+        self.get_logger().info('    - /debug/ally/nav_state (Int32)')
+        if self.airsim_connected:
+            self.get_logger().info('  Enemy Drone (Ground Truth from AirSim):')
+            self.get_logger().info('    - /debug/enemy/pose (PoseStamped) - GROUND TRUTH')
+            self.get_logger().info('    - /debug/enemy/path (Path) - GROUND TRUTH')
+        else:
+            self.get_logger().warn('  Enemy Drone ground truth: NOT AVAILABLE (AirSim not connected)')
 
     def odometry_callback(self, msg):
         """Convert VehicleOdometry to nav_msgs/Odometry and PoseStamped."""
@@ -241,6 +302,70 @@ class AirSimVizTranslator(Node):
 
         except Exception as e:
             self.get_logger().error(f"Error in status_callback: {e}")
+
+    def publish_enemy_ground_truth(self):
+        """Publish Enemy drone ground truth from AirSim API."""
+        if not self.airsim_connected:
+            return
+
+        try:
+            # Get Enemy state from AirSim
+            state = self.airsim_client.getMultirotorState(vehicle_name=self.enemy_vehicle_name)
+
+            timestamp = self.get_clock().now().to_msg()
+
+            # Create PoseStamped message
+            pose = PoseStamped()
+            pose.header.stamp = timestamp
+            pose.header.frame_id = 'world'
+
+            # AirSim uses NED coordinates
+            # Enemy position is in AirSim global NED frame
+            # PX4 local frame origin is at Ally's spawn position
+            # So we need to subtract Ally's spawn offset to get position relative to PX4 origin
+            ned_pos = state.kinematics_estimated.position
+            enemy_pos_airsim_ned = [ned_pos.x_val, ned_pos.y_val, ned_pos.z_val]
+
+            # Subtract Ally spawn offset to get position in PX4 local frame
+            enemy_pos_px4_ned = [
+                enemy_pos_airsim_ned[0] - self.ally_spawn_offset_ned[0],
+                enemy_pos_airsim_ned[1] - self.ally_spawn_offset_ned[1],
+                enemy_pos_airsim_ned[2] - self.ally_spawn_offset_ned[2]
+            ]
+
+            # Convert from NED to ENU (ROS2 standard)
+            enu_pos = CoordinateTransform.ned_to_enu_local_frame(enemy_pos_px4_ned)
+
+            pose.pose.position.x = float(enu_pos.x)
+            pose.pose.position.y = float(enu_pos.y)
+            pose.pose.position.z = float(enu_pos.z)
+
+            # Convert quaternion from NED to ENU
+            ned_quat = state.kinematics_estimated.orientation
+            # AirSim quaternion is [w, x, y, z], convert to [x, y, z, w] for our function
+            q_ned_xyzw = [ned_quat.x_val, ned_quat.y_val, ned_quat.z_val, ned_quat.w_val]
+            enu_quat = CoordinateTransform.px4_to_ros_orientation(q_ned_xyzw)
+
+            pose.pose.orientation.x = float(enu_quat[0])
+            pose.pose.orientation.y = float(enu_quat[1])
+            pose.pose.orientation.z = float(enu_quat[2])
+            pose.pose.orientation.w = float(enu_quat[3])
+
+            # Publish ground truth pose
+            self.enemy_pose_pub.publish(pose)
+
+            # Update and publish path
+            self.enemy_path.header.stamp = timestamp
+            self.enemy_path.poses.append(pose)
+
+            # Limit path length
+            if len(self.enemy_path.poses) > self.max_path_length:
+                self.enemy_path.poses.pop(0)
+
+            self.enemy_path_pub.publish(self.enemy_path)
+
+        except Exception as e:
+            self.get_logger().error(f"Error publishing Enemy ground truth: {e}")
 
 
 def main(args=None):

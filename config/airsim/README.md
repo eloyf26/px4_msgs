@@ -4,6 +4,51 @@
 
 This directory contains the AirSim configuration file for running Halcon1 system with AirSim + Unreal Engine simulation.
 
+## AirSim Keyboard Controls & Camera Views
+
+### Camera Views
+- **`\` (Backslash)**: Cycle between vehicles (Ally → Enemy → Ally)
+- **`0-9` (Number keys)**: Switch between camera angles for current vehicle
+  - `0`: Default chase camera (follows behind drone)
+  - `1`: Front camera view (FPV - First Person View)
+  - `2`: Ground observer view
+  - Other numbers: Additional camera positions
+- **`/` (Forward slash)**: Toggle sub-window display (Ally's front camera)
+
+### Camera Movement (Manual/Observer Mode)
+- **`W/A/S/D`**: Move camera forward/left/backward/right
+- **`Q/E`**: Move camera down/up
+- **Mouse**: Look around (hold right-click and drag)
+- **Mouse Scroll**: Zoom in/out
+
+### Recording & Capture
+- **`R`**: Start/stop recording (saves to Documents/AirSim/)
+- **`PrtScn` (Print Screen)**: Take screenshot
+
+### Display Options
+- **`F1`**: Toggle help menu (shows all keyboard shortcuts)
+- **`F5`**: Toggle API control indicators
+- **`T`**: Toggle trace lines (shows vehicle trajectory)
+- **`~` (Tilde)**: Open Unreal Engine console
+  - Type `r.ScreenPercentage 70` - Lower graphics quality
+  - Type `sg.ViewDistanceScale 0.5` - Reduce view distance
+  - Type `stat fps` - Show FPS counter
+
+### Simulation Control
+- **`;` (Semicolon)**: Pause/unpause simulation
+- **`Alt + F4`**: Quit AirSim
+
+### Multi-Drone Specific
+When running with `--multi` flag (Ally + Enemy):
+- Press `\` to see Enemy drone location
+- Enemy drone is controlled via Python script (not keyboard)
+- Ally drone is controlled by PX4 (via QGroundControl or offboard commands)
+
+### Important Notes
+- **You cannot manually control PX4Multirotor (Ally)** with keyboard - it's controlled by PX4 autopilot
+- **Enemy (SimpleFlight)** is controlled via AirSim Python API (control_enemy_airsim.py)
+- Camera controls only affect your view, not the drone's flight
+
 ## Quick Setup (Automated)
 
 The easiest way to configure AirSim for Halcon1:

@@ -11,7 +11,7 @@ setup(
             ['resource/' + package_name]),
         ('share/' + package_name, ['package.xml']),
     ],
-    install_requires=['setuptools'],
+    install_requires=['setuptools', 'scipy>=1.10.0'],
     zip_safe=True,
     maintainer='Halcon Team',
     maintainer_email='dev@halcon.com',

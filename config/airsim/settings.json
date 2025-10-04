@@ -2,10 +2,12 @@
   "SettingsVersion": 1.2,
   "SimMode": "Multirotor",
   "ClockType": "SteppableClock",
-  "ViewMode": "SpringArmChase",
+  "ViewMode": "",
   "LocalHostIp": "127.0.0.1",
   "RecordUIVisible": false,
   "LogMessagesVisible": true,
+  "EnableCollisionPassthrough": false,
+  "UsageScenario": "",
   "Vehicles": {
     "Ally": {
       "VehicleType": "PX4Multirotor",
@@ -61,6 +63,15 @@
           "Yaw": 0.0
         }
       }
+    },
+    "Enemy": {
+      "VehicleType": "SimpleFlight",
+      "X": 10,
+      "Y": 0,
+      "Z": 0,
+      "Pitch": 0,
+      "Roll": 0,
+      "Yaw": 180
     }
   },
   "SubWindows": [

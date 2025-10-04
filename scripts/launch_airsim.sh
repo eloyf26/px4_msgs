@@ -13,10 +13,15 @@ NC='\033[0m' # No Color
 
 # Parse command line arguments
 DEBUG_MODE=false
+MULTI_DRONE=false
 for arg in "$@"; do
     case $arg in
         --debug)
             DEBUG_MODE=true
+            shift
+            ;;
+        --multi)
+            MULTI_DRONE=true
             shift
             ;;
         *)
@@ -44,7 +49,10 @@ echo -e "${YELLOW}Repository root: $REPO_ROOT${NC}"
 echo -e "${YELLOW}PX4 directory: $PX4_DIR${NC}"
 echo -e "${YELLOW}Workspace: $WS_ROS2${NC}"
 if [ "$DEBUG_MODE" = true ]; then
-    echo -e "${MAGENTA}DEBUG MODE: Enabled - Camera viewer will launch automatically${NC}"
+    echo -e "${MAGENTA}DEBUG MODE: Enabled - RViz2 will launch automatically${NC}"
+fi
+if [ "$MULTI_DRONE" = true ]; then
+    echo -e "${MAGENTA}MULTI-DRONE MODE: Enabled - Enemy drone control will launch${NC}"
 fi
 
 # Check if required directories exist
@@ -174,29 +182,177 @@ open_terminal "AirSim Camera Bridge" "$AIRSIM_BRIDGE_CMD" "$YELLOW"
 # Wait for all nodes to initialize
 sleep 3
 
-# Terminal 4: PX4 Debug Translator (if debug mode)
+# Halcon1 Pipeline Nodes (Detection, Tracking, Guidance)
+TERMINAL_COUNT=3
+
+# Terminal 4: Detection Node
+TERMINAL_COUNT=$((TERMINAL_COUNT + 1))
+echo -e "${CYAN}Starting Terminal $TERMINAL_COUNT: Detection Node...${NC}"
+
+# Build detection command based on debug mode
 if [ "$DEBUG_MODE" = true ]; then
-    echo -e "${MAGENTA}Starting Terminal 4: PX4 Debug Translator...${NC}"
+    DEBUG_TOPICS="echo '  - /debug/ally/detection_image (sensor_msgs/Image)'; \
+echo '';"
+    DETECTION_CMD="echo -e '${CYAN}=== Halcon1 Detection Node ===${NC}'; \
+echo 'YOLOv11n drone detection'; \
+echo ''; \
+echo 'Subscribed topics:'; \
+echo '  - /camera/image (sensor_msgs/Image)'; \
+echo ''; \
+echo 'Published topics:'; \
+echo '  - /enemy/detection (halcon1_msgs/Detection)'; \
+$DEBUG_TOPICS \
+echo 'Loading YOLO model...'; \
+echo ''; \
+source $ROS_SETUP; \
+source $WS_SETUP; \
+if [ -d '$WS_ROS2/venv' ]; then \
+    source $WS_ROS2/venv/bin/activate; \
+fi; \
+echo -e '${GREEN}Detection node starting...${NC}'; \
+ros2 run halcon1_detection detection_node --ros-args -p debug:=true"
+else
+    DETECTION_CMD="echo -e '${CYAN}=== Halcon1 Detection Node ===${NC}'; \
+echo 'YOLOv11n drone detection'; \
+echo ''; \
+echo 'Subscribed topics:'; \
+echo '  - /camera/image (sensor_msgs/Image)'; \
+echo ''; \
+echo 'Published topics:'; \
+echo '  - /enemy/detection (halcon1_msgs/Detection)'; \
+echo ''; \
+echo 'Loading YOLO model...'; \
+echo ''; \
+source $ROS_SETUP; \
+source $WS_SETUP; \
+if [ -d '$WS_ROS2/venv' ]; then \
+    source $WS_ROS2/venv/bin/activate; \
+fi; \
+echo -e '${GREEN}Detection node starting...${NC}'; \
+ros2 run halcon1_detection detection_node"
+fi
+open_terminal "Detection Node" "$DETECTION_CMD" "$CYAN"
+sleep 2
+
+# Terminal 5: Tracking Node
+TERMINAL_COUNT=$((TERMINAL_COUNT + 1))
+echo -e "${CYAN}Starting Terminal $TERMINAL_COUNT: Tracking Node...${NC}"
+TRACKING_CMD="echo -e '${CYAN}=== Halcon1 Tracking Node ===${NC}'; \
+echo 'Camera-to-world coordinate transformation'; \
+echo ''; \
+echo 'Subscribed topics:'; \
+echo '  - /enemy/detection (halcon1_msgs/Detection)'; \
+echo '  - /camera/camera_info (sensor_msgs/CameraInfo)'; \
+echo '  - /fmu/out/vehicle_odometry (px4_msgs/VehicleOdometry)'; \
+echo ''; \
+echo 'Published topics:'; \
+echo '  - /enemy/pose (geometry_msgs/PoseStamped)'; \
+echo ''; \
+source $ROS_SETUP; \
+source $WS_SETUP; \
+echo -e '${GREEN}Tracking node starting...${NC}'; \
+ros2 run halcon1_tracking tracking_node"
+open_terminal "Tracking Node" "$TRACKING_CMD" "$CYAN"
+sleep 2
+
+# Terminal 6: Guidance Node
+TERMINAL_COUNT=$((TERMINAL_COUNT + 1))
+echo -e "${CYAN}Starting Terminal $TERMINAL_COUNT: Guidance Node...${NC}"
+GUIDANCE_CMD="echo -e '${CYAN}=== Halcon1 Guidance Node ===${NC}'; \
+echo 'Kalman Filter + Proportional Navigation'; \
+echo ''; \
+echo 'Subscribed topics:'; \
+echo '  - /enemy/tracked (halcon1_msgs/TrackedObject)'; \
+echo '  - /fmu/out/vehicle_odometry (px4_msgs/VehicleOdometry)'; \
+echo ''; \
+echo 'Published topics:'; \
+echo '  - /interception/command (halcon1_msgs/InterceptionCommand)'; \
+echo '  - /fmu/in/trajectory_setpoint (px4_msgs/TrajectorySetpoint)'; \
+echo ''; \
+source $ROS_SETUP; \
+source $WS_SETUP; \
+echo -e '${GREEN}Guidance node starting...${NC}'; \
+ros2 run halcon1_guidance guidance_node"
+open_terminal "Guidance Node" "$GUIDANCE_CMD" "$CYAN"
+sleep 2
+
+# Terminal 7: Enemy Drone Controller (if multi-drone mode)
+if [ "$MULTI_DRONE" = true ]; then
+    TERMINAL_COUNT=$((TERMINAL_COUNT + 1))
+    echo -e "${MAGENTA}Starting Terminal $TERMINAL_COUNT: Enemy Drone Controller...${NC}"
+    ENEMY_CMD="echo -e '${MAGENTA}=== Enemy Drone Controller ===${NC}'; \
+    echo 'Waiting for user input to start enemy drone...'; \
+    echo ''; \
+    echo 'IMPORTANT: Wait for Ally drone to takeoff first!'; \
+    echo ''; \
+    echo 'Movement patterns available:'; \
+    echo '  1. Circular    - Fly in a circle'; \
+    echo '  2. Figure-8    - Fly in a figure-8 pattern'; \
+    echo '  3. Random      - Move to random positions'; \
+    echo '  4. Hover       - Hover at current position'; \
+    echo ''; \
+    echo -e '${GREEN}Press ENTER when ready to start enemy control...${NC}'; \
+    read; \
+    python3 $REPO_ROOT/scripts/control_enemy_airsim.py --altitude 5 --speed 3 --radius 8"
+    open_terminal "Enemy Drone Controller" "$ENEMY_CMD" "$MAGENTA"
+    sleep 2
+fi
+
+# Terminal 8 or 7: PX4 Debug Translator (if debug mode)
+if [ "$DEBUG_MODE" = true ]; then
+    TERMINAL_COUNT=$((TERMINAL_COUNT + 1))
+    echo -e "${MAGENTA}Starting Terminal $TERMINAL_COUNT: PX4 Debug Translator...${NC}"
+
+    # Read Ally spawn position from AirSim settings.json
+    AIRSIM_SETTINGS="$HOME/Documents/AirSim/settings.json"
+    if [ -f "$AIRSIM_SETTINGS" ]; then
+        # Extract Ally spawn coordinates using grep and sed
+        ALLY_X=$(grep -A 20 '"Ally"' "$AIRSIM_SETTINGS" | grep '"X"' | head -1 | sed 's/.*: *\([0-9.-]*\).*/\1/')
+        ALLY_Y=$(grep -A 20 '"Ally"' "$AIRSIM_SETTINGS" | grep '"Y"' | head -1 | sed 's/.*: *\([0-9.-]*\).*/\1/')
+        ALLY_Z=$(grep -A 20 '"Ally"' "$AIRSIM_SETTINGS" | grep '"Z"' | head -1 | sed 's/.*: *\([0-9.-]*\).*/\1/')
+
+        # Default to 0 if extraction failed
+        ALLY_X=${ALLY_X:-0}
+        ALLY_Y=${ALLY_Y:-0}
+        ALLY_Z=${ALLY_Z:-0}
+
+        echo -e "${CYAN}Ally spawn position from settings.json: X=$ALLY_X, Y=$ALLY_Y, Z=$ALLY_Z${NC}"
+    else
+        echo -e "${YELLOW}Warning: AirSim settings.json not found, using default Ally spawn (0,0,0)${NC}"
+        ALLY_X=0
+        ALLY_Y=0
+        ALLY_Z=0
+    fi
+
     TRANSLATOR_CMD="echo -e '${MAGENTA}=== PX4 Debug Translator ===${NC}'; \
-    echo 'Converting PX4 topics to ROS2 standard messages for RViz2...'; \
+    echo 'Converting PX4 and Halcon1 topics to RViz2 standard messages...'; \
     echo ''; \
     echo 'Available RViz2 topics:'; \
-    echo '  /debug/ally/pose (PoseStamped) - Current drone position'; \
-    echo '  /debug/ally/path (Path) - Flight trajectory'; \
-    echo '  /debug/ally/odometry (Odometry) - Full state estimate'; \
-    echo '  /debug/ally/velocity (TwistStamped) - Current velocity'; \
-    echo '  /debug/ally/setpoint (PoseStamped) - Desired position'; \
-    echo '  /debug/ally/status (String) - Flight mode and arming status'; \
+    echo '  Ally Drone:'; \
+    echo '    /debug/ally/pose (PoseStamped) - Current position'; \
+    echo '    /debug/ally/path (Path) - Flight trajectory'; \
+    echo '    /debug/ally/odometry (Odometry) - Full state'; \
+    echo '    /debug/ally/velocity (TwistStamped) - Current velocity'; \
+    echo '    /debug/ally/setpoint (PoseStamped) - Desired position'; \
+    echo '    /debug/ally/status (String) - Flight mode'; \
+    echo '  Enemy Drone (if multi-drone):'; \
+    echo '    /debug/enemy/pose (PoseStamped) - Ground truth from AirSim'; \
+    echo '    /debug/enemy/path (Path) - Ground truth trajectory'; \
     echo ''; \
     source $ROS_SETUP; \
     source $WS_SETUP; \
     echo -e '${GREEN}Translator starting...${NC}'; \
-    ros2 run airsim_viz_translator viz_translator"
+    ros2 run airsim_viz_translator viz_translator \
+        --ros-args \
+        -p ally_spawn_x:=$ALLY_X \
+        -p ally_spawn_y:=$ALLY_Y \
+        -p ally_spawn_z:=$ALLY_Z"
     open_terminal "PX4 Debug Translator" "$TRANSLATOR_CMD" "$MAGENTA"
     sleep 2
 
-    # Terminal 5: RViz2
-    echo -e "${BLUE}Starting Terminal 5: RViz2 Visualization...${NC}"
+    # Terminal 9 or 8: RViz2
+    TERMINAL_COUNT=$((TERMINAL_COUNT + 1))
+    echo -e "${BLUE}Starting Terminal $TERMINAL_COUNT: RViz2 Visualization...${NC}"
     RVIZ_CMD="echo -e '${BLUE}=== RViz2 3D Visualization ===${NC}'; \
     echo 'Launching RViz2 for drone visualization...'; \
     echo ''; \
@@ -226,48 +382,69 @@ echo ""
 echo -e "  1. ${GREEN}MicroXRCE Agent${NC} - UDP port 8888 (PX4 ↔ ROS2 bridge)"
 echo -e "  2. ${BLUE}PX4 SITL${NC} - Flight controller (connected to AirSim)"
 echo -e "  3. ${YELLOW}AirSim Camera Bridge${NC} - Publishes /camera/image and /camera/camera_info"
+echo -e "  4. ${CYAN}Detection Node${NC} - YOLOv11n drone detection"
+echo -e "  5. ${CYAN}Tracking Node${NC} - Camera-to-world coordinate transform"
+echo -e "  6. ${CYAN}Guidance Node${NC} - Kalman Filter + Proportional Navigation"
+
+TERM_NUM=6
+if [ "$MULTI_DRONE" = true ]; then
+    TERM_NUM=$((TERM_NUM + 1))
+    echo -e "  $TERM_NUM. ${MAGENTA}Enemy Drone Controller${NC} - SimpleFlight API control (interactive)"
+fi
 if [ "$DEBUG_MODE" = true ]; then
-    echo -e "  4. ${MAGENTA}PX4 Debug Translator${NC} - PX4 → ROS2 message conversion for RViz2"
-    echo -e "  5. ${BLUE}RViz2${NC} - 3D visualization (pose, path, odometry)"
+    TERM_NUM=$((TERM_NUM + 1))
+    echo -e "  $TERM_NUM. ${MAGENTA}PX4 Debug Translator${NC} - PX4 → ROS2 message conversion for RViz2"
+    TERM_NUM=$((TERM_NUM + 1))
+    echo -e "  $TERM_NUM. ${BLUE}RViz2${NC} - 3D visualization (pose, path, odometry)"
 fi
 echo ""
 echo -e "${CYAN}╔════════════════════════════════════════════════════════════╗${NC}"
 echo -e "${CYAN}║                    Next Steps                              ║${NC}"
 echo -e "${CYAN}╚════════════════════════════════════════════════════════════╝${NC}"
 echo ""
-echo -e "${YELLOW}1. Control the Ally drone:${NC}"
+echo -e "${YELLOW}1. Control the Ally drone (PX4Multirotor):${NC}"
 echo -e "   - QGroundControl should auto-connect to PX4 on UDP 14550"
 echo -e "   - Or manually in PX4 terminal: ${GREEN}commander arm${NC} && ${GREEN}commander takeoff${NC}"
-echo -e "   - Keyboard control in AirSim: Press ${GREEN}F1${NC} (recursive mode)"
 echo ""
-echo -e "${YELLOW}2. Verify camera is working:${NC}"
+NEXT_STEP=2
+if [ "$MULTI_DRONE" = true ]; then
+    echo -e "${YELLOW}2. Control the Enemy drone (SimpleFlight):${NC}"
+    echo -e "   - In Enemy Drone Controller terminal, press ENTER to start"
+    echo -e "   - Select movement pattern: 1=Circular, 2=Figure-8, 3=Random, 4=Hover"
+    echo -e "   - ${RED}IMPORTANT:${NC} Arm/takeoff Ally first, then start Enemy"
+    echo ""
+    NEXT_STEP=3
+fi
+echo -e "${YELLOW}$NEXT_STEP. Verify camera is working:${NC}"
+NEXT_STEP=$((NEXT_STEP + 1))
 echo -e "   ${GREEN}ros2 topic hz /camera/image${NC}              - Check camera feed rate (~30 Hz)"
 if [ "$DEBUG_MODE" = false ]; then
     echo -e "   ${GREEN}ros2 run rqt_image_view rqt_image_view${NC}   - View camera images"
 fi
 echo ""
 if [ "$DEBUG_MODE" = true ]; then
-    echo -e "${YELLOW}3. Visualize drone in RViz2 (Terminal 5):${NC}"
+    echo -e "${YELLOW}$NEXT_STEP. Visualize drone in RViz2:${NC}"
     echo -e "   ${MAGENTA}RViz2 already launched automatically${NC}"
     echo -e "   - Set Fixed Frame: ${GREEN}world${NC}"
     echo -e "   - Add → Pose → Topic: ${GREEN}/debug/ally/pose${NC}"
     echo -e "   - Add → Path → Topic: ${GREEN}/debug/ally/path${NC}"
     echo -e "   - See drone position and flight trajectory in 3D"
     echo ""
+    NEXT_STEP=$((NEXT_STEP + 1))
 fi
-echo -e "${YELLOW}$(if [ "$DEBUG_MODE" = true ]; then echo "4"; else echo "3"; fi). (Optional) Launch Halcon1 detection pipeline:${NC}"
-echo -e "   ${GREEN}ros2 run halcon1_detection detection_node${NC}     - YOLOv11n detection"
-echo -e "   ${GREEN}ros2 run halcon1_tracking tracking_node${NC}       - Coordinate transformation"
-echo -e "   ${GREEN}ros2 run halcon1_guidance guidance_node${NC}       - Kalman Filter + ProNav"
+echo -e "${GREEN}$NEXT_STEP. Halcon1 pipeline is running automatically!${NC}"
+NEXT_STEP=$((NEXT_STEP + 1))
+echo -e "   ${CYAN}Detection, Tracking, and Guidance nodes are already active${NC}"
+echo -e "   ${CYAN}Check terminals 4, 5, 6 for node status${NC}"
 echo ""
-echo -e "${YELLOW}$(if [ "$DEBUG_MODE" = true ]; then echo "5"; else echo "4"; fi). Monitor key ROS2 topics:${NC}"
-echo -e "   ${GREEN}ros2 topic list${NC}                          - Show all available topics"
+echo -e "${YELLOW}$NEXT_STEP. Monitor pipeline topics:${NC}"
+echo -e "   ${GREEN}ros2 topic echo /enemy/detection --once${NC}      - Detection results"
+echo -e "   ${GREEN}ros2 topic echo /enemy/tracked --once${NC}        - 3D world coordinates"
+echo -e "   ${GREEN}ros2 topic echo /interception/command --once${NC} - Guidance commands"
+echo -e "   ${GREEN}ros2 topic hz /camera/image${NC}                  - Camera rate (~30 Hz)"
 if [ "$DEBUG_MODE" = true ]; then
-    echo -e "   ${GREEN}ros2 topic echo /debug/ally/pose${NC}         - Drone pose (RViz2 format)"
-    echo -e "   ${GREEN}ros2 topic echo /debug/ally/status${NC}       - Flight mode and arming"
+    echo -e "   ${GREEN}ros2 topic echo /debug/ally/pose --once${NC}      - Drone pose (RViz2)"
 fi
-echo -e "   ${GREEN}ros2 topic echo /fmu/out/vehicle_odometry${NC} - Drone position/velocity (PX4 format)"
-echo -e "   ${GREEN}ros2 topic echo /camera/camera_info${NC}      - Camera calibration"
 echo ""
 echo -e "${CYAN}╔════════════════════════════════════════════════════════════╗${NC}"
 echo -e "${CYAN}║                    Troubleshooting                         ║${NC}"

@@ -125,11 +125,15 @@ cd ~/AirSimEnvironments/Blocks/
 
 # In new terminal, launch Halcon1
 cd halcon1-system
-./scripts/launch_airsim.sh              # Normal mode
-./scripts/launch_airsim.sh --debug      # With RViz2 visualization
+./scripts/launch_airsim.sh              # Single drone
+./scripts/launch_airsim.sh --debug      # Single drone + RViz2
+./scripts/launch_airsim.sh --multi      # Multi-drone (Ally + Enemy)
+./scripts/launch_airsim.sh --multi --debug  # Multi-drone + RViz2
 ```
 
-📖 **Detailed AirSim Guide**: [docs/QUICK_START_AIRSIM.md](docs/QUICK_START_AIRSIM.md)
+📖 **AirSim Guides**:
+- [Quick Start](docs/QUICK_START_AIRSIM.md) - Single drone setup
+- [Multi-Drone](docs/MULTI_DRONE_AIRSIM.md) - Ally vs Enemy interception
 
 ### Simulator Comparison
 
@@ -566,9 +570,13 @@ Apache 2.0 - See LICENSE file
 
 ## Documentation
 
+### AirSim Simulation
 - [AirSim Quick Start](docs/QUICK_START_AIRSIM.md) - Get started with AirSim in 3 steps
+- [Multi-Drone AirSim](docs/MULTI_DRONE_AIRSIM.md) - Ally vs Enemy interception setup
 - [AirSim Configuration](config/airsim/README.md) - AirSim settings and troubleshooting
 - [AirSim Implementation Plan](AIRSIM_IMPLEMENTATION_PLAN.md) - Technical implementation details
+
+### General
 - [Testing Guide](TESTING.md) - Detailed testing procedures
 - [PX4 Troubleshooting](PX4_FIX.md) - PX4 specific issues
 - [Project Roadmap](PLAN.md) - Development plan and milestones
