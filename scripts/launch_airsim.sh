@@ -44,7 +44,7 @@ echo -e "${YELLOW}Repository root: $REPO_ROOT${NC}"
 echo -e "${YELLOW}PX4 directory: $PX4_DIR${NC}"
 echo -e "${YELLOW}Workspace: $WS_ROS2${NC}"
 if [ "$DEBUG_MODE" = true ]; then
-    echo -e "${MAGENTA}DEBUG MODE: Enabled${NC}"
+    echo -e "${MAGENTA}DEBUG MODE: Enabled - Camera viewer will launch automatically${NC}"
 fi
 
 # Check if required directories exist
@@ -99,10 +99,10 @@ open_terminal() {
 echo -e "${YELLOW}Cleaning up existing processes...${NC}"
 pkill -f px4
 pkill -f MicroXRCEAgent
-pkill -f airsim_node
-pkill -f detection_node
-pkill -f tracking_node
-pkill -f guidance_node
+pkill -f airsim_camera_bridge
+pkill -f airsim_viz_translator
+pkill -f rqt_image_view
+pkill -f rviz2
 sleep 2
 
 # Instructions for starting AirSim
@@ -143,7 +143,7 @@ echo 'Starting PX4 SITL - will connect to AirSim on TCP port 4560...'; \
 echo 'LockStep mode enabled for synchronized simulation'; \
 echo ''; \
 cd $PX4_DIR && \
-ENABLE_LOCKSTEP_SCHEDULER=yes PX4_SIM_MODEL=none ./build/px4_sitl_default/bin/px4"
+PX4_SYS_AUTOSTART=10016 PX4_SIM_MODEL=iris PX4_SIMULATOR=airsim ./build/px4_sitl_default/bin/px4"
 open_terminal "PX4 SITL" "$PX4_CMD" "$BLUE"
 
 # Wait for PX4 to connect to AirSim
@@ -151,79 +151,73 @@ echo -e "${YELLOW}Waiting for PX4 to connect to AirSim...${NC}"
 echo -e "${YELLOW}Check PX4 terminal for 'Simulator connected on TCP port 4560'${NC}"
 sleep 10
 
-# Terminal 3: AirSim ROS Bridge (camera and other sensors)
-echo -e "${BLUE}Starting Terminal 3: AirSim ROS Bridge...${NC}"
-AIRSIM_BRIDGE_CMD="echo -e '${YELLOW}=== AirSim ROS Bridge ===${NC}'; \
-echo 'Starting ROS2 bridge for AirSim topics...'; \
+# Terminal 3: AirSim Camera Bridge (Python-based)
+echo -e "${BLUE}Starting Terminal 3: AirSim Camera Bridge...${NC}"
+AIRSIM_BRIDGE_CMD="echo -e '${YELLOW}=== AirSim Camera Bridge ===${NC}'; \
+echo 'Starting Python-based ROS2 camera bridge...'; \
 echo ''; \
-echo 'Bridged topics:'; \
-echo '  /airsim_node/Ally/front_center/Scene → /camera/image'; \
-echo '  /airsim_node/Ally/front_center/camera_info → /camera/camera_info'; \
+echo 'Published topics:'; \
+echo '  - /camera/image (sensor_msgs/Image)'; \
+echo '  - /camera/camera_info (sensor_msgs/CameraInfo)'; \
 echo ''; \
-source $ROS_SETUP; \
-source $WS_SETUP; \
-ros2 run airsim_ros_pkgs airsim_node --ros-args \
-  -p host_ip:=localhost \
-  -r /airsim_node/Ally/front_center/Scene:=/camera/image \
-  -r /airsim_node/Ally/front_center/camera_info:=/camera/camera_info"
-open_terminal "AirSim ROS Bridge" "$AIRSIM_BRIDGE_CMD" "$YELLOW"
-
-# Wait for bridge to start
-sleep 5
-
-# Terminal 4: Detection Node
-echo -e "${CYAN}Starting Terminal 4: Detection Node (YOLOv11n)...${NC}"
-DETECTION_CMD="echo -e '${CYAN}=== Detection Node (YOLOv11n) ===${NC}'; \
-echo -e '${YELLOW}Starting drone detection with YOLOv11n...${NC}'; \
-echo ''; \
-echo 'Detection outputs:'; \
-echo '  - /enemy/detection: Bounding box coordinates'; \
-echo '  - /debug/ally/detection_image: Annotated camera feed'; \
+echo 'Configuration:'; \
+echo '  - Vehicle: Ally'; \
+echo '  - Camera: front_center'; \
+echo '  - Rate: 30 Hz'; \
 echo ''; \
 source $ROS_SETUP; \
 source $WS_SETUP; \
-source $WS_ROS2/venv/bin/activate; \
-echo -e '${GREEN}Detection node starting...${NC}'; \
-ros2 run halcon1_detection detection_node"
-open_terminal "Detection Node" "$DETECTION_CMD" "$CYAN"
-
-# Terminal 5: Tracking Node
-echo -e "${MAGENTA}Starting Terminal 5: Tracking Node...${NC}"
-TRACKING_CMD="echo -e '${MAGENTA}=== Tracking Node ===${NC}'; \
-echo -e '${YELLOW}Starting coordinate transformation for world tracking...${NC}'; \
-echo ''; \
-echo 'Tracking inputs/outputs:'; \
-echo '  - Subscribes to: /enemy/detection (from Detection Node)'; \
-echo '  - Subscribes to: /fmu/out/vehicle_odometry (friendly drone pose)'; \
-echo '  - Publishes to: /enemy/pose (world coordinates)'; \
-echo ''; \
-source $ROS_SETUP; \
-source $WS_SETUP; \
-echo -e '${GREEN}Tracking node starting...${NC}'; \
-ros2 run halcon1_tracking tracking_node"
-open_terminal "Tracking Node" "$TRACKING_CMD" "$MAGENTA"
-
-# Terminal 6: Guidance Node
-echo -e "${GREEN}Starting Terminal 6: Guidance Node...${NC}"
-GUIDANCE_CMD="echo -e '${GREEN}=== Guidance Node ===${NC}'; \
-echo -e '${YELLOW}Starting Kalman Filter + Proportional Navigation...${NC}'; \
-echo ''; \
-echo 'Guidance inputs/outputs:'; \
-echo '  - Subscribes to: /enemy/pose (from Tracking Node)'; \
-echo '  - Subscribes to: /fmu/out/vehicle_odometry (friendly drone pose)'; \
-echo '  - Publishes to: /fmu/in/trajectory_setpoint (PX4 commands)'; \
-echo ''; \
-source $ROS_SETUP; \
-source $WS_SETUP; \
-echo -e '${GREEN}Guidance node starting...${NC}'; \
-ros2 run halcon1_guidance guidance_node"
-open_terminal "Guidance Node" "$GUIDANCE_CMD" "$GREEN"
+echo -e '${GREEN}Camera bridge starting...${NC}'; \
+ros2 run airsim_camera_bridge camera_bridge"
+open_terminal "AirSim Camera Bridge" "$AIRSIM_BRIDGE_CMD" "$YELLOW"
 
 # Wait for all nodes to initialize
 sleep 3
 
+# Terminal 4: PX4 Debug Translator (if debug mode)
+if [ "$DEBUG_MODE" = true ]; then
+    echo -e "${MAGENTA}Starting Terminal 4: PX4 Debug Translator...${NC}"
+    TRANSLATOR_CMD="echo -e '${MAGENTA}=== PX4 Debug Translator ===${NC}'; \
+    echo 'Converting PX4 topics to ROS2 standard messages for RViz2...'; \
+    echo ''; \
+    echo 'Available RViz2 topics:'; \
+    echo '  /debug/ally/pose (PoseStamped) - Current drone position'; \
+    echo '  /debug/ally/path (Path) - Flight trajectory'; \
+    echo '  /debug/ally/odometry (Odometry) - Full state estimate'; \
+    echo '  /debug/ally/velocity (TwistStamped) - Current velocity'; \
+    echo '  /debug/ally/setpoint (PoseStamped) - Desired position'; \
+    echo '  /debug/ally/status (String) - Flight mode and arming status'; \
+    echo ''; \
+    source $ROS_SETUP; \
+    source $WS_SETUP; \
+    echo -e '${GREEN}Translator starting...${NC}'; \
+    ros2 run airsim_viz_translator viz_translator"
+    open_terminal "PX4 Debug Translator" "$TRANSLATOR_CMD" "$MAGENTA"
+    sleep 2
+
+    # Terminal 5: RViz2
+    echo -e "${BLUE}Starting Terminal 5: RViz2 Visualization...${NC}"
+    RVIZ_CMD="echo -e '${BLUE}=== RViz2 3D Visualization ===${NC}'; \
+    echo 'Launching RViz2 for drone visualization...'; \
+    echo ''; \
+    echo 'Quick Setup:'; \
+    echo '  1. Set Fixed Frame: world'; \
+    echo '  2. Add → Pose → Topic: /debug/ally/pose'; \
+    echo '  3. Add → Path → Topic: /debug/ally/path'; \
+    echo '  4. Add → Image → Topic: /camera/image (optional)'; \
+    echo ''; \
+    echo 'You should see the drone position and flight path in 3D'; \
+    echo ''; \
+    source $ROS_SETUP; \
+    source $WS_SETUP; \
+    echo -e '${GREEN}Launching RViz2...${NC}'; \
+    rviz2"
+    open_terminal "RViz2" "$RVIZ_CMD" "$BLUE"
+    sleep 2
+fi
+
 echo ""
-echo -e "${GREEN}=== All nodes launched ===${NC}"
+echo -e "${GREEN}=== Core System Launched ===${NC}"
 echo ""
 echo -e "${CYAN}╔════════════════════════════════════════════════════════════╗${NC}"
 echo -e "${CYAN}║                    Terminal Summary                        ║${NC}"
@@ -231,32 +225,49 @@ echo -e "${CYAN}╚════════════════════�
 echo ""
 echo -e "  1. ${GREEN}MicroXRCE Agent${NC} - UDP port 8888 (PX4 ↔ ROS2 bridge)"
 echo -e "  2. ${BLUE}PX4 SITL${NC} - Flight controller (connected to AirSim)"
-echo -e "  3. ${YELLOW}AirSim ROS Bridge${NC} - Camera and sensor topics"
-echo -e "  4. ${CYAN}Detection Node${NC} - YOLOv11n drone detection"
-echo -e "  5. ${MAGENTA}Tracking Node${NC} - Coordinate transformation"
-echo -e "  6. ${GREEN}Guidance Node${NC} - Kalman Filter + ProNav interception"
+echo -e "  3. ${YELLOW}AirSim Camera Bridge${NC} - Publishes /camera/image and /camera/camera_info"
+if [ "$DEBUG_MODE" = true ]; then
+    echo -e "  4. ${MAGENTA}PX4 Debug Translator${NC} - PX4 → ROS2 message conversion for RViz2"
+    echo -e "  5. ${BLUE}RViz2${NC} - 3D visualization (pose, path, odometry)"
+fi
 echo ""
 echo -e "${CYAN}╔════════════════════════════════════════════════════════════╗${NC}"
 echo -e "${CYAN}║                    Next Steps                              ║${NC}"
 echo -e "${CYAN}╚════════════════════════════════════════════════════════════╝${NC}"
 echo ""
-echo -e "${YELLOW}1. Use QGroundControl to control the Ally drone:${NC}"
+echo -e "${YELLOW}1. Control the Ally drone:${NC}"
 echo -e "   - QGroundControl should auto-connect to PX4 on UDP 14550"
-echo -e "   - Or manually: commander arm && commander takeoff in PX4 terminal"
+echo -e "   - Or manually in PX4 terminal: ${GREEN}commander arm${NC} && ${GREEN}commander takeoff${NC}"
+echo -e "   - Keyboard control in AirSim: Press ${GREEN}F1${NC} (recursive mode)"
 echo ""
-echo -e "${YELLOW}2. Control the Enemy drone (optional):${NC}"
-echo -e "   - Press F1 in AirSim to enable keyboard control"
-echo -e "   - Or use Python API: airsim.MultirotorClient()"
+echo -e "${YELLOW}2. Verify camera is working:${NC}"
+echo -e "   ${GREEN}ros2 topic hz /camera/image${NC}              - Check camera feed rate (~30 Hz)"
+if [ "$DEBUG_MODE" = false ]; then
+    echo -e "   ${GREEN}ros2 run rqt_image_view rqt_image_view${NC}   - View camera images"
+fi
 echo ""
-echo -e "${YELLOW}3. Monitor ROS2 topics:${NC}"
-echo -e "   ${GREEN}ros2 topic hz /camera/image${NC}         - Camera feed"
-echo -e "   ${GREEN}ros2 topic echo /enemy/detection${NC}    - YOLO detections"
-echo -e "   ${GREEN}ros2 topic echo /enemy/pose${NC}         - Enemy world coordinates"
-echo -e "   ${GREEN}ros2 topic echo /fmu/in/trajectory_setpoint${NC} - Guidance commands"
+if [ "$DEBUG_MODE" = true ]; then
+    echo -e "${YELLOW}3. Visualize drone in RViz2 (Terminal 5):${NC}"
+    echo -e "   ${MAGENTA}RViz2 already launched automatically${NC}"
+    echo -e "   - Set Fixed Frame: ${GREEN}world${NC}"
+    echo -e "   - Add → Pose → Topic: ${GREEN}/debug/ally/pose${NC}"
+    echo -e "   - Add → Path → Topic: ${GREEN}/debug/ally/path${NC}"
+    echo -e "   - See drone position and flight trajectory in 3D"
+    echo ""
+fi
+echo -e "${YELLOW}$(if [ "$DEBUG_MODE" = true ]; then echo "4"; else echo "3"; fi). (Optional) Launch Halcon1 detection pipeline:${NC}"
+echo -e "   ${GREEN}ros2 run halcon1_detection detection_node${NC}     - YOLOv11n detection"
+echo -e "   ${GREEN}ros2 run halcon1_tracking tracking_node${NC}       - Coordinate transformation"
+echo -e "   ${GREEN}ros2 run halcon1_guidance guidance_node${NC}       - Kalman Filter + ProNav"
 echo ""
-echo -e "${YELLOW}4. Visualize with RViz2 or rqt_image_view:${NC}"
-echo -e "   ${GREEN}ros2 run rqt_image_view rqt_image_view${NC}  - View camera feed"
-echo -e "   ${GREEN}ros2 run rviz2 rviz2${NC}                    - 3D visualization"
+echo -e "${YELLOW}$(if [ "$DEBUG_MODE" = true ]; then echo "5"; else echo "4"; fi). Monitor key ROS2 topics:${NC}"
+echo -e "   ${GREEN}ros2 topic list${NC}                          - Show all available topics"
+if [ "$DEBUG_MODE" = true ]; then
+    echo -e "   ${GREEN}ros2 topic echo /debug/ally/pose${NC}         - Drone pose (RViz2 format)"
+    echo -e "   ${GREEN}ros2 topic echo /debug/ally/status${NC}       - Flight mode and arming"
+fi
+echo -e "   ${GREEN}ros2 topic echo /fmu/out/vehicle_odometry${NC} - Drone position/velocity (PX4 format)"
+echo -e "   ${GREEN}ros2 topic echo /camera/camera_info${NC}      - Camera calibration"
 echo ""
 echo -e "${CYAN}╔════════════════════════════════════════════════════════════╗${NC}"
 echo -e "${CYAN}║                    Troubleshooting                         ║${NC}"
@@ -266,18 +277,20 @@ echo -e "${RED}Problem: PX4 shows 'Waiting for simulator...'${NC}"
 echo -e "${YELLOW}Solution: Make sure AirSim is running and fully loaded before starting PX4${NC}"
 echo ""
 echo -e "${RED}Problem: No camera topics appearing${NC}"
-echo -e "${YELLOW}Solution: Check that AirSim ROS Bridge terminal shows successful connection${NC}"
-echo -e "${YELLOW}         Run: ros2 topic list | grep camera${NC}"
+echo -e "${YELLOW}Solution: Check AirSim Camera Bridge terminal for errors${NC}"
+echo -e "${YELLOW}         Verify: ros2 topic list | grep camera${NC}"
+echo -e "${YELLOW}         Check: ros2 node list | grep airsim${NC}"
 echo ""
 echo -e "${RED}Problem: Drone falls immediately after takeoff${NC}"
 echo -e "${YELLOW}Solution: Verify LockStep is enabled in ~/Documents/AirSim/settings.json${NC}"
+echo -e "${YELLOW}         Check all sensors enabled in settings.json (IMU, GPS, Barometer, Magnetometer)${NC}"
 echo ""
 echo -e "${GREEN}For more help, see: $REPO_ROOT/config/airsim/README.md${NC}"
 echo ""
 echo -e "${MAGENTA}Press Ctrl+C to stop all processes and close this launcher.${NC}"
 
 # Wait for user to press Ctrl+C
-trap "echo -e '\n${YELLOW}Stopping all processes...${NC}'; pkill -f px4; pkill -f MicroXRCEAgent; pkill -f airsim_node; pkill -f detection_node; pkill -f tracking_node; pkill -f guidance_node; echo -e '${GREEN}Cleanup complete.${NC}'; exit 0" INT
+trap "echo -e '\n${YELLOW}Stopping all processes...${NC}'; pkill -f px4; pkill -f MicroXRCEAgent; pkill -f airsim_camera_bridge; pkill -f airsim_viz_translator; pkill -f rviz2; pkill -f rqt_image_view; echo -e '${GREEN}Cleanup complete.${NC}'; exit 0" INT
 
 # Keep script running
 while true; do

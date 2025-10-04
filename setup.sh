@@ -2,13 +2,73 @@
 
 # Halcon1 System Setup Script
 # This script initializes all dependencies and builds the complete system
+# Usage: ./setup.sh [--airsim]
 
 set -e  # Exit on error
 
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 cd "$SCRIPT_DIR"
 
+# Parse command line arguments
+INSTALL_GAZEBO=true
+INSTALL_AIRSIM=false
+VALIDATE_ONLY=false
+
+for arg in "$@"; do
+    case $arg in
+        --gazebo)
+            INSTALL_GAZEBO=true
+            INSTALL_AIRSIM=false
+            shift
+            ;;
+        --airsim)
+            INSTALL_GAZEBO=false
+            INSTALL_AIRSIM=true
+            shift
+            ;;
+        --full)
+            INSTALL_GAZEBO=true
+            INSTALL_AIRSIM=true
+            shift
+            ;;
+        --validate)
+            VALIDATE_ONLY=true
+            shift
+            ;;
+        --help)
+            echo "Halcon1 Setup Script"
+            echo ""
+            echo "Usage: ./setup.sh [OPTIONS]"
+            echo ""
+            echo "Options:"
+            echo "  --gazebo     Build Gazebo dependencies only (default)"
+            echo "  --airsim     Build AirSim dependencies only"
+            echo "  --full       Build both Gazebo AND AirSim dependencies"
+            echo "  --validate   Check what's installed and working"
+            echo "  --help       Show this help message"
+            exit 0
+            ;;
+        *)
+            ;;
+    esac
+done
+
 echo "=== Halcon1 System Setup ==="
+
+# Handle validation mode
+if [ "$VALIDATE_ONLY" = true ]; then
+    echo "→ Running validation checks..."
+    exec "$SCRIPT_DIR/scripts/validate_setup.sh"
+    exit $?
+fi
+
+if [ "$INSTALL_GAZEBO" = true ] && [ "$INSTALL_AIRSIM" = true ]; then
+    echo "→ Mode: FULL (Gazebo + AirSim)"
+elif [ "$INSTALL_AIRSIM" = true ]; then
+    echo "→ Mode: AirSim only"
+elif [ "$INSTALL_GAZEBO" = true ]; then
+    echo "→ Mode: Gazebo only (default)"
+fi
 
 # 1. Initialize and update git submodules
 echo "→ Initializing git submodules..."
@@ -69,6 +129,16 @@ sudo apt-get install -y \
     ros-humble-rosgraph-msgs
 echo "✓ ros_gz dependencies installed"
 
+# 6b. Install AirSim ROS2 dependencies (optional)
+if [ "$INSTALL_AIRSIM" = true ]; then
+    echo "→ Installing AirSim ROS2 dependencies..."
+    sudo apt-get install -y \
+        ros-humble-tf2-sensor-msgs \
+        ros-humble-tf2-geometry-msgs \
+        ros-humble-mavros-msgs
+    echo "✓ AirSim ROS2 dependencies installed"
+fi
+
 # 7. Initialize rosdep and setup rules for Gazebo Harmonic
 echo "→ Setting up rosdep rules for Gazebo Harmonic..."
 sudo mkdir -p /etc/ros/rosdep/sources.list.d
@@ -104,6 +174,16 @@ pip3 install --upgrade pip
 pip3 install -r ws_ros2/src/Halcon1/modules/halcon1_detection/requirements.txt
 echo "✓ Python dependencies installed system-wide"
 
+# Install AirSim Python dependencies (optional)
+if [ "$INSTALL_AIRSIM" = true ]; then
+    echo "→ Installing AirSim Python dependencies..."
+    pip3 install msgpack-rpc-python
+    pip3 install airsim
+    echo "✓ AirSim Python dependencies installed"
+else
+    echo "↷ Skipping AirSim Python dependencies (use --airsim to enable)"
+fi
+
 # 9. Build ROS2 workspace
 echo "→ Installing ROS2 build tools..."
 sudo apt install -y \
@@ -133,10 +213,49 @@ colcon build --packages-select ros_gz_sim_demos
 colcon build --packages-select ros_gz
 colcon build --packages-select halcon1_msgs
 colcon build --packages-select halcon1_types
+colcon build --packages-select halcon1_utils
 colcon build --packages-select px4_msgs px4_ros_com
 colcon build --packages-select multi_drone_sim
+colcon build --packages-select airsim_viz_translator
 colcon build --packages-select halcon1_detection halcon1_tracking halcon1_guidance
 colcon build --packages-select halcon1_bringup px4_offboard
+
+# Build AirSim packages (optional)
+if [ "$INSTALL_AIRSIM" = true ]; then
+    echo "→ Preparing AirSim packages..."
+    # Ignore C++ packages we don't use (we use Python bridge instead)
+    touch "$SCRIPT_DIR/ws_ros2/src/airsim/ros2/src/airsim_ros_pkgs/COLCON_IGNORE" 2>/dev/null || true
+
+    echo "→ Building AirSim camera bridge..."
+    cd "$SCRIPT_DIR/ws_ros2"
+    source /opt/ros/humble/setup.bash
+    colcon build --packages-select airsim_camera_bridge
+    echo "✓ AirSim camera bridge built"
+
+    # Copy AirSim settings.json to user directory
+    echo "→ Setting up AirSim configuration..."
+    AIRSIM_CONFIG_DIR="$HOME/Documents/AirSim"
+    AIRSIM_SETTINGS="$SCRIPT_DIR/config/airsim/settings.json"
+
+    mkdir -p "$AIRSIM_CONFIG_DIR"
+
+    if [ -f "$AIRSIM_CONFIG_DIR/settings.json" ]; then
+        echo "  ⚠ Existing settings.json found, creating backup..."
+        cp "$AIRSIM_CONFIG_DIR/settings.json" "$AIRSIM_CONFIG_DIR/settings.json.backup_$(date +%Y%m%d_%H%M%S)"
+    fi
+
+    cp "$AIRSIM_SETTINGS" "$AIRSIM_CONFIG_DIR/settings.json"
+    echo "  ✓ AirSim settings.json copied to $AIRSIM_CONFIG_DIR"
+
+    # Validate JSON syntax
+    if command -v python3 &> /dev/null; then
+        if python3 -c "import json; json.load(open('$AIRSIM_CONFIG_DIR/settings.json'))" 2>/dev/null; then
+            echo "  ✓ Settings.json validated successfully"
+        else
+            echo "  ⚠ Warning: settings.json may have syntax errors"
+        fi
+    fi
+fi
 
 cd "$SCRIPT_DIR"
 
@@ -148,14 +267,39 @@ echo "✓ All scripts are now executable"
 
 echo "=== Setup Complete ==="
 echo ""
-echo "🚀 To use the system:"
-echo ""
-echo "  1. Terminal 1: ./scripts/launch_px4.sh           # PX4 SITL with x500_mono_cam"
-echo "  2. Terminal 2: ./scripts/launch_agent.sh         # MicroXRCE Agent (bridge PX4 → ROS2)"
-echo "  3. Terminal 3: ./scripts/launch_camera_bridge.sh # Camera bridge (Gazebo → ROS2)"
-echo "  4. Terminal 4: ./scripts/launch_halcon1.sh       # Halcon1 ROS2 nodes Pipeline"
-echo "  5. (Optional - to visualize camera images) Terminal 5: ros2 run rqt_image_view  rqt_image_view"
-echo ""
+
+if [ "$INSTALL_AIRSIM" = true ]; then
+    echo "🚀 To use the system with AirSim:"
+    echo ""
+    echo "  1. Download AirSim environment (if not already done):"
+    echo "     ./scripts/install_airsim_env.sh --blocks     # Fast, ~400MB (recommended for testing)"
+    echo "     ./scripts/install_airsim_env.sh --landscape  # Realistic outdoor, ~5GB"
+    echo "     ./scripts/install_airsim_env.sh --city       # Urban environment, ~8GB"
+    echo ""
+    echo "  2. Launch AirSim environment:"
+    echo "     cd ~/AirSimEnvironments/LinuxBlocks1.8.1/LinuxNoEditor"
+    echo "     ./Blocks.sh"
+    echo ""
+    echo "  3. In another terminal, launch AirSim ROS2 bridge:"
+    echo "     ./scripts/launch_airsim.sh"
+    echo ""
+    echo "  ✓ AirSim settings.json already configured at ~/Documents/AirSim/"
+    echo ""
+    echo "  For more details, see: config/airsim/README.md"
+    echo ""
+else
+    echo "🚀 To use the system with Gazebo:"
+    echo ""
+    echo "  1. Terminal 1: ./scripts/launch_px4.sh           # PX4 SITL with x500_mono_cam"
+    echo "  2. Terminal 2: ./scripts/launch_agent.sh         # MicroXRCE Agent (bridge PX4 → ROS2)"
+    echo "  3. Terminal 3: ./scripts/launch_camera_bridge.sh # Camera bridge (Gazebo → ROS2)"
+    echo "  4. Terminal 4: ./scripts/launch_halcon1.sh       # Halcon1 ROS2 nodes Pipeline"
+    echo "  5. (Optional - to visualize camera images) Terminal 5: ros2 run rqt_image_view  rqt_image_view"
+    echo ""
+    echo "  To add AirSim support later, run: ./setup.sh --airsim"
+    echo ""
+fi
+
 echo "🔧 Development Tools:"
 echo "  ./rebuild.sh                                     # Quick rebuild after code changes"
 echo ""

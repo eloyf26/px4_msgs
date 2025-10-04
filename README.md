@@ -83,7 +83,11 @@ Halcon1 uses **PX4** as the flight controller software, which works identically 
 
 ## Quick Start
 
-### Single Drone Simulation
+Halcon1 supports two simulation environments. Choose based on your needs:
+
+### Option A: Gazebo (Fast, Lightweight) ⚡
+
+**Best for**: Development, testing, CI/CD
 
 ```bash
 # Clone repository with submodules
@@ -91,7 +95,7 @@ git clone --recursive https://github.com/eloyf26/halcon1-system.git
 cd halcon1-system
 
 # Run setup (builds everything)
-./setup.sh
+./setup.sh --gazebo
 
 # Launch system (4 terminals)
 ./scripts/launch_px4_offboard.sh      # Terminal 1: PX4 SITL
@@ -99,6 +103,51 @@ cd halcon1-system
 ./scripts/launch_camera_bridge.sh     # Terminal 3: Camera Bridge
 ./scripts/launch_halcon1.sh           # Terminal 4: Halcon1 Pipeline
 ```
+
+### Option B: AirSim (Photo-realistic, Unreal Engine) 🎨
+
+**Best for**: Realistic testing, demos, computer vision research
+
+```bash
+# Clone repository
+git clone --recursive https://github.com/eloyf26/halcon1-system.git
+cd halcon1-system
+
+# Setup for AirSim
+./setup.sh --airsim
+
+# Download environment (~400MB)
+./scripts/install_airsim_env.sh --blocks
+
+# Launch AirSim environment
+cd ~/AirSimEnvironments/Blocks/
+./Blocks.sh
+
+# In new terminal, launch Halcon1
+cd halcon1-system
+./scripts/launch_airsim.sh              # Normal mode
+./scripts/launch_airsim.sh --debug      # With RViz2 visualization
+```
+
+📖 **Detailed AirSim Guide**: [docs/QUICK_START_AIRSIM.md](docs/QUICK_START_AIRSIM.md)
+
+### Simulator Comparison
+
+| Feature | Gazebo | AirSim |
+|---------|--------|--------|
+| **Setup Time** | ~5 minutes | ~10 minutes |
+| **Disk Space** | ~500MB | ~2-8GB |
+| **Graphics Engine** | Ogre2 | Unreal Engine 4/5 |
+| **Physics Engine** | ODE/Bullet | PhysX (NVIDIA) |
+| **Camera Quality** | Good | Photo-realistic |
+| **Performance** | Fast ⚡ | Moderate (GPU) |
+| **Custom Environments** | SDF files | Unreal Editor |
+| **Linux Support** | ✅ Full | ✅ Native only (no WSL2) |
+| **Halcon1 Code Changes** | ✅ None | ✅ None |
+| **PX4 Flight Controller** | ✅ Same | ✅ Same |
+| **ROS2 Topics** | ✅ Same | ✅ Same |
+
+**Key Insight**: Both simulators use the **same PX4 flight controller** and publish to the **same ROS2 topics**. Your Halcon1 detection, tracking, and guidance nodes work identically in both environments!
 
 ### Two-Drone Simulation (Ally vs Enemy)
 
@@ -156,160 +205,6 @@ To stop all running processes and terminals:
 ```
 This script kills all PX4, Gazebo, MicroXRCE agents, and ROS2 nodes.
 
-### AirSim Simulation (Alternative to Gazebo)
-
-Halcon1 also supports **AirSim + Unreal Engine** as an alternative simulation environment. AirSim provides photo-realistic graphics and high-fidelity physics simulation.
-
-#### Why Use AirSim?
-
-- **Photo-realistic environments**: Unreal Engine 4/5 graphics
-- **Custom environments**: Cities, buildings, complex terrain
-- **Better camera simulation**: Realistic lighting, shadows, reflections
-- **PhysX physics**: NVIDIA's physics engine
-- **Same Halcon1 code**: No changes to detection/tracking/guidance nodes
-
-#### Installation
-
-**Note:** AirSim requires a Linux system with GPU support (native Linux installation). WSL2 is not supported due to Vulkan driver limitations.
-
-**Step 1: Install AirSim Prebuilt Environment**
-
-Download a prebuilt Unreal Engine + AirSim binary (no compilation needed):
-
-```bash
-# Create directory for AirSim environments
-mkdir -p ~/AirSimEnvironments
-cd ~/AirSimEnvironments
-
-# Download Blocks environment (recommended for testing - ~2GB)
-wget https://github.com/microsoft/AirSim/releases/download/v1.8.1/Blocks.zip
-
-# Extract (creates LinuxBlocks1.8.1 directory)
-unzip Blocks.zip
-
-# Test that it runs
-cd LinuxBlocks1.8.1/LinuxNoEditor
-bash Blocks.sh
-```
-
-**Note**: First launch may take a few minutes. You should see an Unreal Engine window with a simple environment and "Waiting for connection..." message.
-
-**Alternative environments** (for more realistic scenarios):
-- [Landscape Mountains](https://github.com/microsoft/AirSim/releases/download/v1.8.1/LandscapeMountains.zip) (~5GB) - Extract to `LinuxLandscapeMountains1.8.1/LinuxNoEditor`
-- [City Environment](https://github.com/microsoft/AirSim/releases/download/v1.8.1/CityEnviron.zip) (~8GB) - Extract to `LinuxCityEnviron1.8.1/LinuxNoEditor`
-- [Building 99](https://github.com/Microsoft/AirSim/releases/download/v1.2.0/Building_99.zip) (~1.5GB) - Extract to `LinuxBuilding991.2.0/LinuxNoEditor`
-
-**Note**: All environments follow the pattern `Linux<EnvironmentName><Version>/LinuxNoEditor/<ScriptName>.sh`
-
-**Step 2: Install airsim_ros_pkgs (ROS2 Bridge)**
-
-Clone and build the AirSim ROS2 wrapper:
-
-```bash
-cd /home/eloyfernandez/drone_ws/halcon1-system/ws_ros2/src
-
-# Clone airsim_ros_pkgs
-git clone https://github.com/microsoft/airsim_ros_pkgs.git
-
-# Build
-cd /home/eloyfernandez/drone_ws/halcon1-system/ws_ros2
-source /opt/ros/humble/setup.bash
-colcon build --packages-select airsim_ros_pkgs
-
-# If build fails due to missing dependencies, install:
-sudo apt install ros-humble-tf2-ros ros-humble-tf2-geometry-msgs
-```
-
-**Step 3: Configure AirSim for PX4**
-
-Copy the Halcon1 AirSim configuration:
-
-```bash
-# Create AirSim config directory
-mkdir -p ~/Documents/AirSim
-
-# Copy PX4Multirotor configuration
-cp config/airsim/settings.json ~/Documents/AirSim/
-
-# Verify the file is in the correct location
-cat ~/Documents/AirSim/settings.json | grep PX4Multirotor
-# Should output: "VehicleType": "PX4Multirotor",
-```
-
-**Important**: This configuration uses `PX4Multirotor` (not `SimpleFlight`) so that PX4 controls the ally drone, just like in Gazebo.
-
-#### Quick Start with AirSim
-
-Once installation is complete (Steps 1-3 above), run the system:
-
-**Terminal 1: Start AirSim Environment**
-```bash
-cd ~/AirSimEnvironments/LinuxBlocks1.8.1/LinuxNoEditor
-./Blocks.sh
-# Wait for Unreal Engine to load (~30 seconds)
-# You should see "Waiting for connection..." in AirSim HUD
-```
-
-**Terminal 2: Launch Halcon1 System**
-```bash
-cd /home/eloyfernandez/drone_ws/halcon1-system
-./scripts/launch_airsim.sh
-```
-
-This automatically launches 6 terminals:
-- MicroXRCE Agent (PX4 ↔ ROS2 bridge)
-- PX4 SITL (flight controller, connects to AirSim)
-- AirSim ROS Bridge (camera topics)
-- Detection Node (YOLOv11n)
-- Tracking Node (coordinate transform)
-- Guidance Node (Kalman Filter + ProNav)
-
-**Terminal 3: Control the Drone**
-
-Use QGroundControl (should auto-connect):
-```bash
-# Or use PX4 console commands:
-commander arm
-commander takeoff
-```
-
-#### AirSim vs Gazebo Comparison
-
-| Feature | Gazebo | AirSim |
-|---------|--------|--------|
-| **Graphics** | Ogre2 | Unreal Engine 4/5 |
-| **Physics** | ODE/Bullet | PhysX (NVIDIA) |
-| **Camera Quality** | Good | Photo-realistic |
-| **Performance** | Fast | Slower (GPU intensive) |
-| **Custom Environments** | SDF files | Unreal Editor |
-| **Setup Difficulty** | Easy | Moderate |
-| **Halcon1 Code Changes** | None | None |
-
-#### Controlling the Drones in AirSim
-
-**Ally Drone (PX4):**
-- Use QGroundControl (same as Gazebo)
-- Or PX4 console: `commander arm && commander takeoff`
-
-**Enemy Drone (SimpleFlight):**
-- Press `F1` in AirSim for keyboard control
-- Or use Python API:
-  ```python
-  import airsim
-  client = airsim.MultirotorClient()
-  client.confirmConnection()
-  client.enableApiControl(True, "Enemy")
-  client.armDisarm(True, "Enemy")
-  client.takeoffAsync(vehicle_name="Enemy").join()
-  ```
-
-#### Additional Resources
-
-For advanced configuration and troubleshooting:
-- **AirSim Configuration Details**: [config/airsim/README.md](config/airsim/README.md)
-  - Camera settings customization
-  - Multi-drone setup
-  - Troubleshooting common issues
 
 ### Visualization
 
@@ -358,14 +253,29 @@ halcon1-system/
 │       ├── px4_msgs/           # PX4 message definitions
 │       ├── px4_ros_com/        # PX4-ROS2 bridge
 │       ├── px4_offboard/       # PX4 offboard examples
-│       └── multi_drone_sim/    # Multi-drone simulation package
+│       ├── multi_drone_sim/    # Multi-drone simulation package
+│       ├── airsim_camera_bridge/   # AirSim camera → ROS2 bridge
+│       ├── airsim_viz_translator/  # PX4 → RViz2 message translator
+│       └── ros_gz/             # Gazebo Harmonic ↔ ROS2 bridge
+├── config/
+│   └── airsim/                # AirSim configuration files
+│       ├── settings.json      # PX4Multirotor setup
+│       └── README.md          # AirSim config documentation
 ├── scripts/                    # Launch scripts
-│   ├── launch_px4.sh          # Start PX4 SITL
+│   ├── launch_px4.sh          # Start PX4 SITL (Gazebo)
 │   ├── launch_agent.sh        # Start MicroXRCE Agent
-│   ├── launch_halcon1.sh     # Start Halcon1 pipeline
-│   └── launch_multi_terminal.sh # Launch multi-drone simulation
+│   ├── launch_halcon1.sh      # Start Halcon1 pipeline
+│   ├── launch_multi_terminal.sh  # Multi-drone simulation (Gazebo)
+│   ├── launch_airsim.sh       # Launch AirSim system
+│   ├── install_airsim_env.sh  # Download AirSim environments
+│   ├── validate_setup.sh      # Validate installation
+│   └── cleanup_simulation.sh  # Kill all simulation processes
+├── docs/
+│   └── QUICK_START_AIRSIM.md  # AirSim quick start guide
 ├── setup.sh                   # One-click setup script
-└── README.md                  # This file
+├── README.md                  # This file
+├── PLAN.md                    # Project roadmap
+└── AIRSIM_IMPLEMENTATION_PLAN.md  # AirSim implementation details
 ```
 
 ## Installation
@@ -389,16 +299,35 @@ cd halcon1-system
 2. **Run the setup script:**
 
 ```bash
-./setup.sh
+# For Gazebo (default)
+./setup.sh --gazebo
+
+# For AirSim
+./setup.sh --airsim
+
+# For both simulators
+./setup.sh --full
+
+# Validate installation
+./setup.sh --validate
 ```
 
-This will:
-- Initialize git submodules
-- Build MicroXRCE-DDS-Agent
-- Build PX4 SITL (optional)
-- Install ROS2
-- Install ROS2 Gazebo Bridge
-- Build all ROS2 packages
+**Setup options:**
+- `--gazebo`: Build Gazebo dependencies and ros_gz bridge (default)
+- `--airsim`: Build AirSim dependencies and camera bridge
+- `--full`: Build BOTH Gazebo and AirSim support
+- `--validate`: Check what's installed and working
+- `--help`: Show usage information
+
+**What setup does:**
+- ✅ Initialize git submodules (PX4, MicroXRCE Agent)
+- ✅ Build MicroXRCE-DDS-Agent
+- ✅ Build PX4 SITL
+- ✅ Install ROS2 dependencies
+- ✅ Build simulator-specific bridges:
+  - Gazebo: ros_gz bridge for Gazebo Harmonic
+  - AirSim: airsim_camera_bridge + airsim_viz_translator
+- ✅ Build all Halcon1 ROS2 packages
 
 ## Running the System
 
@@ -637,5 +566,9 @@ Apache 2.0 - See LICENSE file
 
 ## Documentation
 
+- [AirSim Quick Start](docs/QUICK_START_AIRSIM.md) - Get started with AirSim in 3 steps
+- [AirSim Configuration](config/airsim/README.md) - AirSim settings and troubleshooting
+- [AirSim Implementation Plan](AIRSIM_IMPLEMENTATION_PLAN.md) - Technical implementation details
 - [Testing Guide](TESTING.md) - Detailed testing procedures
 - [PX4 Troubleshooting](PX4_FIX.md) - PX4 specific issues
+- [Project Roadmap](PLAN.md) - Development plan and milestones
