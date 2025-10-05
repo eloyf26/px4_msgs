@@ -38,7 +38,7 @@ if [ ! -f "/opt/ros/humble/setup.bash" ]; then
 fi
 
 # Check if workspace is built
-WS_SETUP="$REPO_ROOT/ws_ros2/install/setup.bash"
+WS_SETUP="$REPO_ROOT/install/setup.bash"
 if [ ! -f "$WS_SETUP" ]; then
     echo -e "${RED}✗ Error: ROS2 workspace not built${NC}"
     echo -e "${YELLOW}  Run setup first: ./setup.sh --gazebo${NC}"
@@ -48,7 +48,7 @@ if [ ! -f "$WS_SETUP" ]; then
 fi
 
 # Path to Python launcher
-LAUNCHER="$REPO_ROOT/simulation/common/launcher.py"
+LAUNCHER="$REPO_ROOT/src/ros2/simulation/common/launcher.py"
 
 # Check if launcher exists
 if [ ! -f "$LAUNCHER" ]; then

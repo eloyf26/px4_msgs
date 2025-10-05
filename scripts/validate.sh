@@ -98,9 +98,9 @@ check_status "Gazebo Harmonic installed" \
     true
 
 check_status "ros_gz packages built" \
-    "test -d $REPO_ROOT/ws_ros2/install/ros_gz" \
+    "test -d $REPO_ROOT/install/ros_gz" \
     "ros_gz not built" \
-    "Run: cd ws_ros2 && colcon build --packages-select ros_gz" \
+    "Run: colcon build --packages-select ros_gz" \
     true
 
 echo ""
@@ -120,13 +120,13 @@ check_status "msgpack-rpc-python package" \
     true
 
 check_status "camera_bridge built" \
-    "test -d $REPO_ROOT/ws_ros2/install/camera_bridge" \
+    "test -d $REPO_ROOT/install/camera_bridge" \
     "camera_bridge not built" \
     "Run: ./setup.sh --airsim" \
     true
 
 check_status "viz_translator built" \
-    "test -d $REPO_ROOT/ws_ros2/install/viz_translator" \
+    "test -d $REPO_ROOT/install/viz_translator" \
     "viz_translator not built" \
     "Run: ./setup.sh --airsim" \
     true
@@ -148,44 +148,44 @@ echo ""
 # ROS2 Workspace
 echo -e "${BLUE}ROS2 Workspace:${NC}"
 check_status "ROS2 workspace built" \
-    "test -f $REPO_ROOT/ws_ros2/install/setup.bash" \
+    "test -f $REPO_ROOT/install/setup.bash" \
     "Workspace not built" \
-    "Run: cd ws_ros2 && colcon build"
+    "Run: colcon build"
 
 check_status "msgs package" \
-    "test -d $REPO_ROOT/ws_ros2/install/msgs" \
+    "test -d $REPO_ROOT/install/msgs" \
     "msgs not built" \
-    "Run: cd ws_ros2 && colcon build --packages-select msgs"
+    "Run: colcon build --packages-select msgs"
 
 check_status "detection package" \
-    "test -d $REPO_ROOT/ws_ros2/install/detection" \
+    "test -d $REPO_ROOT/install/detection" \
     "detection not built" \
-    "Run: cd ws_ros2 && colcon build --packages-select detection"
+    "Run: colcon build --packages-select detection"
 
 check_status "tracking package" \
-    "test -d $REPO_ROOT/ws_ros2/install/tracking" \
+    "test -d $REPO_ROOT/install/tracking" \
     "tracking not built" \
-    "Run: cd ws_ros2 && colcon build --packages-select tracking"
+    "Run: colcon build --packages-select tracking"
 
 check_status "guidance package" \
-    "test -d $REPO_ROOT/ws_ros2/install/guidance" \
+    "test -d $REPO_ROOT/install/guidance" \
     "guidance not built" \
-    "Run: cd ws_ros2 && colcon build --packages-select guidance"
+    "Run: colcon build --packages-select guidance"
 
-check_status "utils package" \
-    "test -d $REPO_ROOT/ws_ros2/install/utils" \
-    "utils not built" \
-    "Run: cd ws_ros2 && colcon build --packages-select utils"
+check_status "ally_visualizer package" \
+    "test -d $REPO_ROOT/install/ally_visualizer" \
+    "ally_visualizer not built" \
+    "Run: colcon build --packages-select ally_visualizer"
 
 check_status "common_types package" \
-    "test -d $REPO_ROOT/ws_ros2/install/common_types" \
+    "test -d $REPO_ROOT/install/common_types" \
     "common_types not built" \
-    "Run: cd ws_ros2 && colcon build --packages-select common_types"
+    "Run: colcon build --packages-select common_types"
 
 check_status "px4_msgs package" \
-    "test -d $REPO_ROOT/ws_ros2/install/px4_msgs" \
+    "test -d $REPO_ROOT/install/px4_msgs" \
     "px4_msgs not built" \
-    "Run: cd ws_ros2 && colcon build --packages-select px4_msgs"
+    "Run: colcon build --packages-select px4_msgs"
 
 echo ""
 
@@ -225,26 +225,20 @@ echo ""
 
 # Scripts Executable
 echo -e "${BLUE}Scripts:${NC}"
-check_status "launch_px4.sh executable" \
-    "test -x $REPO_ROOT/scripts/launch_px4.sh" \
+check_status "launch.sh executable" \
+    "test -x $REPO_ROOT/scripts/launch.sh" \
     "Script not executable" \
-    "Run: chmod +x scripts/launch_px4.sh"
+    "Run: chmod +x scripts/launch.sh"
 
-check_status "launch_agent.sh executable" \
-    "test -x $REPO_ROOT/scripts/launch_agent.sh" \
+check_status "validate.sh executable" \
+    "test -x $REPO_ROOT/scripts/validate.sh" \
     "Script not executable" \
-    "Run: chmod +x scripts/launch_agent.sh"
+    "Run: chmod +x scripts/validate.sh"
 
-check_status "launch_airsim.sh executable" \
-    "test -x $REPO_ROOT/scripts/launch_airsim.sh" \
+check_status "cleanup.sh executable" \
+    "test -x $REPO_ROOT/scripts/cleanup.sh" \
     "Script not executable" \
-    "Run: chmod +x scripts/launch_airsim.sh" \
-    true
-
-check_status "install_airsim_env.sh executable" \
-    "test -x $REPO_ROOT/scripts/install_airsim_env.sh" \
-    "Script not executable" \
-    "Run: chmod +x scripts/install_airsim_env.sh" \
+    "Run: chmod +x scripts/cleanup.sh" \
     true
 
 echo ""
@@ -255,8 +249,8 @@ if [ "$ALL_GOOD" = true ]; then
     echo -e "${GREEN}✓ All required components are installed and configured!${NC}"
     echo ""
     echo -e "${BLUE}Next steps:${NC}"
-    echo -e "  ${GREEN}Gazebo:${NC} ./scripts/launch_multi_terminal.sh"
-    echo -e "  ${GREEN}AirSim:${NC} ./scripts/launch_airsim.sh"
+    echo -e "  ${GREEN}Gazebo:${NC} ./scripts/launch.sh --sim gazebo"
+    echo -e "  ${GREEN}AirSim:${NC} ./scripts/launch.sh --sim airsim"
 else
     echo -e "${YELLOW}⚠ Some required components are missing or not configured${NC}"
     echo ""

@@ -149,5 +149,5 @@ models/
 # Backup files
 *.orig
 *.rej
-# Symlinks organized in ws_ros2/src/symlinks/
-ws_ros2/src/symlinks/
+# ROS2 workspace build artifacts at top level
+# Note: build/, install/, log/ are already ignored by patterns at top of file

@@ -24,7 +24,7 @@ class SimulationEngineBase(SimulationEngine):
 
     Provides:
     - Terminal detection and process launching
-    - Common path setup (repo_root, px4_dir, ws_ros2)
+    - Common path setup (repo_root, px4_dir, Halcon1)
     - Generic process cleanup
     - Default implementations for optional interface methods
 
@@ -40,9 +40,9 @@ class SimulationEngineBase(SimulationEngine):
         super().__init__(config)
 
         # Common paths (used by all engines)
-        self.repo_root = Path(__file__).parent.parent.parent.parent
+        self.repo_root = Path(__file__).parent.parent.parent.parent.parent.parent
         self.px4_dir = self.repo_root / "external" / "PX4-Autopilot"
-        self.ws_ros2 = self.repo_root / "ws_ros2"
+        self.ws_ros2 = self.repo_root
 
         # Process tracking for cleanup
         self.processes = []

@@ -44,7 +44,7 @@ class AirSimEngine(SimulationEngineBase):
 
     def __init__(self, config):
         super().__init__(config)
-        self.config_dir = self.repo_root / "simulation" / "airsim" / "config"
+        self.config_dir = self.repo_root / "src" / "ros2" / "simulation" / "airsim" / "config"
         self.airsim_user_config = Path.home() / "Documents" / "AirSim" / "settings.json"
 
     def get_name(self) -> str:

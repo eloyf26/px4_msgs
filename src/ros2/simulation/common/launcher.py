@@ -51,12 +51,12 @@ class Halcon1Launcher:
     """Main launcher for Halcon1 simulation system"""
 
     def __init__(self):
-        self.repo_root = Path(__file__).parent.parent.parent
+        self.repo_root = Path(__file__).parent.parent.parent.parent.parent
         self.px4_dir = self.repo_root / "external" / "PX4-Autopilot"
         self.micro_xrce_agent = (
             self.repo_root / "external" / "Micro-XRCE-DDS-Agent" / "build" / "MicroXRCEAgent"
         )
-        self.ws_ros2 = self.repo_root / "ws_ros2"
+        self.ws_ros2 = self.repo_root
 
         self.processes = []
         self.engine: Optional[SimulationEngine] = None
@@ -284,7 +284,7 @@ Available simulators:
         ws_setup = self.ws_ros2 / "install" / "setup.bash"
         if not ws_setup.exists():
             print(f"[Launcher] ERROR: ROS2 workspace not built at {self.ws_ros2}")
-            print("[Launcher] Build it with: cd ws_ros2 && colcon build")
+            print("[Launcher] Build it with: colcon build")
             return False
 
         print("[Launcher] ✓ Basic environment validated")

@@ -274,18 +274,15 @@ rosdep update
 rosdep resolve gz-harmonic
 echo "✓ Rosdep rules for Gazebo Harmonic installed"
 
-# 8. Clone ros_gz from source (humble branch) to simulation/gazebo/bridges/
+# 8. Verify ros_gz submodule (should already exist in src/ros2/external/)
 if [ "$INSTALL_GAZEBO" = true ]; then
-    echo "→ Ensuring ros_gz source (humble branch)..."
-    if [ -d "simulation/gazebo/bridges/.git" ]; then
-        echo "↷ ros_gz already present; skipping clone"
+    echo "→ Checking ros_gz submodule..."
+    if [ -d "src/ros2/external/ros_gz/.git" ]; then
+        echo "✓ ros_gz submodule present"
     else
-        echo "→ Cloning ros_gz from source (humble branch)..."
-        mkdir -p simulation/gazebo
-        cd simulation/gazebo
-        git clone https://github.com/gazebosim/ros_gz.git -b humble bridges
-        cd "$SCRIPT_DIR"
-        echo "✓ ros_gz cloned from humble branch"
+        echo "→ Initializing ros_gz submodule..."
+        git submodule update --init --recursive src/ros2/external/ros_gz
+        echo "✓ ros_gz submodule initialized"
     fi
     export GZ_VERSION=harmonic # Required for building ros_gz in step 10
     echo "✓ GZ_VERSION=harmonic exported"
@@ -331,7 +328,6 @@ sudo apt install -y \
 echo "✓ ROS2 build tools installed"
 
 echo "→ Building ROS2 packages..."
-cd ws_ros2
 source /opt/ros/humble/setup.bash
 
 # Verify Python dependencies before building
@@ -343,62 +339,14 @@ else
     verify_python_dependencies "gazebo"
 fi
 
-# Clean up old directories from pre-reorganization
-echo "→ Cleaning up old package directories..."
-if [ -d "src/airsim" ]; then
-    echo "  ↷ Removing old airsim directory..."
-    rm -rf src/airsim
+# Clean up old build artifacts
+echo "→ Cleaning up old build artifacts..."
+if [ -d "build" ] || [ -d "install" ] || [ -d "log" ]; then
+    echo "  ↷ Removing old build/install/log directories..."
+    rm -rf build/ install/ log/
+    echo "  ✓ Old build artifacts removed"
 fi
-# Remove duplicate PX4 packages (they should only be in px4_bridges/)
-for pkg in px4_msgs px4-offboard px4_ros_com; do
-    if [ -d "src/$pkg" ]; then
-        echo "  ↷ Removing duplicate $pkg directory (using px4_bridges/ instead)..."
-        rm -rf "src/$pkg"
-    fi
-done
-
-# Clean up old builds from renamed packages (halcon1_* → *)
-echo "→ Cleaning up old package builds from rename..."
-if [ -d "build/halcon1_detection" ] || [ -d "install/halcon1_detection" ]; then
-    echo "  ↷ Removing old halcon1_* build and install directories..."
-    rm -rf build/halcon1_* install/halcon1_*
-    echo "  ✓ Old package builds removed"
-fi
-
 echo "  ✓ Cleanup complete"
-
-# Create organized symlinks structure
-echo "→ Creating organized symlinks for external packages..."
-mkdir -p src/symlinks/gazebo src/symlinks/airsim
-
-# Clean up old symlinks if they exist
-for old_symlink in ros_gz adversarial camera_bridge viz_translator; do
-    if [ -L "src/$old_symlink" ]; then
-        echo "  ↷ Removing old symlink: src/$old_symlink"
-        rm "src/$old_symlink"
-    fi
-done
-
-# Common simulation packages
-if [ ! -L "src/symlinks/enemy_control" ]; then
-    ln -sf ../../../simulation/common/debug/enemy_control src/symlinks/enemy_control
-    echo "  ✓ Created symlink for enemy_control"
-fi
-
-# Gazebo-specific packages
-if [ ! -L "src/symlinks/gazebo/enemy_visualizer" ]; then
-    ln -sf ../../../../simulation/gazebo/debug/enemy_visualizer src/symlinks/gazebo/enemy_visualizer
-    echo "  ✓ Created symlink for enemy_visualizer (Gazebo)"
-fi
-
-if [ ! -L "src/symlinks/gazebo/ros_gz" ]; then
-    ln -sf ../../../../simulation/gazebo/bridges src/symlinks/gazebo/ros_gz
-    echo "  ✓ Created symlink for ros_gz"
-fi
-
-# AirSim-specific packages (created later if --airsim enabled)
-
-echo "  ✓ Symlinks structure created"
 
 # 10. Build in correct order
 
@@ -421,10 +369,13 @@ else
     echo "↷ Skipping Gazebo packages (use --gazebo or --full to enable)"
 fi
 
-# Build enemy control (common across simulators)
-echo "→ Building enemy control..."
-colcon build --packages-select enemy_control
-echo "  ✓ Enemy control built"
+# Build Gazebo enemy control and visualizer
+if [ "$INSTALL_GAZEBO" = true ]; then
+    echo "→ Building Gazebo-specific packages..."
+    colcon build --packages-select gazebo_enemy_control
+    colcon build --packages-select gazebo_enemy_visualizer
+    echo "  ✓ Gazebo-specific packages built"
+fi
 
 # Build PX4 messages first (required by detection/tracking/guidance)
 echo "→ Building PX4 message definitions..."
@@ -444,26 +395,15 @@ colcon build --packages-select bringup
 # Build AirSim packages (optional)
 if [ "$INSTALL_AIRSIM" = true ]; then
     echo "→ Building AirSim packages..."
-
-    # Create AirSim symlinks
-    if [ ! -L "src/symlinks/airsim/camera_bridge" ]; then
-        ln -sf ../../../simulation/airsim/debug/camera_bridge src/symlinks/airsim/camera_bridge
-        echo "  ✓ Created symlink for camera_bridge"
-    fi
-
-    if [ ! -L "src/symlinks/airsim/viz_translator" ]; then
-        ln -sf ../../../simulation/airsim/debug/viz_translator src/symlinks/airsim/viz_translator
-        echo "  ✓ Created symlink for viz_translator"
-    fi
-
     colcon build --packages-select camera_bridge
-    colcon build --packages-select viz_translator
+    colcon build --packages-select airsim_enemy_control
+    colcon build --packages-select airsim_enemy_visualizer
     echo "  ✓ AirSim packages built"
 
     # Copy AirSim settings.json to user directory
     echo "→ Setting up AirSim configuration..."
     AIRSIM_CONFIG_DIR="$HOME/Documents/AirSim"
-    AIRSIM_SETTINGS="$SCRIPT_DIR/simulation/airsim/config/settings.json"
+    AIRSIM_SETTINGS="$SCRIPT_DIR/src/ros2/simulation/airsim/config/settings.json"
 
     mkdir -p "$AIRSIM_CONFIG_DIR"
 
@@ -612,8 +552,8 @@ if [ "$INSTALL_GAZEBO" = true ]; then
 fi
 
 echo "🔧 Development Tools:"
-echo "  cd ws_ros2 && colcon build --packages-select <package_name>"
-echo "  cd ws_ros2 && colcon build                      # Rebuild all packages"
+echo "  colcon build --packages-select <package_name>"
+echo "  colcon build                                    # Rebuild all packages"
 echo ""
 echo "📊 Available ROS2 Topics:"
 echo "  /camera/image       - Camera images (sensor_msgs/Image)"
@@ -623,5 +563,5 @@ echo "  /enemy/tracked      - Target tracking"
 echo "  /interception/command - Interception commands"
 echo ""
 echo "Source ROS2 workspace in new terminals:"
-echo "  source $SCRIPT_DIR/ws_ros2/install/setup.bash"
+echo "  source $SCRIPT_DIR/install/setup.bash"
 echo ""
