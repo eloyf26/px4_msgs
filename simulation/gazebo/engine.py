@@ -179,20 +179,23 @@ class GazeboEngine(SimulationEngineBase):
             print(f"[{self.get_name()}] ERROR: Workspace not built at {ws_setup}")
             return False
 
+        # Get the selected world (or default if not set)
+        world_name = getattr(self, 'selected_world', self.DEFAULT_WORLD)
+
         # Launch camera bridge
         # Bridge Gazebo camera topics to ROS2 with remapping
-        # Gazebo publishes to: /world/default/model/x500_mono_cam_0/link/camera_link/sensor/imager/*
+        # Gazebo publishes to: /world/{world_name}/model/x500_mono_cam_0/link/camera_link/sensor/imager/*
         # We remap to: /camera/*
         bridge_cmd = [
             "bash", "-c",
             f"source /opt/ros/humble/setup.bash && "
             f"source {ws_setup} && "
             f"ros2 run ros_gz_bridge parameter_bridge "
-            f"/world/default/model/x500_mono_cam_0/link/camera_link/sensor/imager/image@sensor_msgs/msg/Image[gz.msgs.Image "
-            f"/world/default/model/x500_mono_cam_0/link/camera_link/sensor/imager/camera_info@sensor_msgs/msg/CameraInfo[gz.msgs.CameraInfo "
+            f"/world/{world_name}/model/x500_mono_cam_0/link/camera_link/sensor/imager/image@sensor_msgs/msg/Image[gz.msgs.Image "
+            f"/world/{world_name}/model/x500_mono_cam_0/link/camera_link/sensor/imager/camera_info@sensor_msgs/msg/CameraInfo[gz.msgs.CameraInfo "
             f"--ros-args "
-            f"-r /world/default/model/x500_mono_cam_0/link/camera_link/sensor/imager/image:=/camera/image "
-            f"-r /world/default/model/x500_mono_cam_0/link/camera_link/sensor/imager/camera_info:=/camera/camera_info"
+            f"-r /world/{world_name}/model/x500_mono_cam_0/link/camera_link/sensor/imager/image:=/camera/image "
+            f"-r /world/{world_name}/model/x500_mono_cam_0/link/camera_link/sensor/imager/camera_info:=/camera/camera_info"
         ]
 
         proc = self._launch_in_terminal(
