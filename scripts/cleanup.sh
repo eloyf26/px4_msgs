@@ -85,22 +85,32 @@ kill_process "guidance_node"
 kill_process "rqt_image_view"
 kill_process "rviz2"
 
-# Kill terminal emulators spawned by scripts
-echo -e "${YELLOW}Stopping terminal emulators spawned by script...${NC}"
-kill_process "gnome-terminal.*MicroXRCE Agent"
-kill_process "gnome-terminal.*PX4 SITL"
-kill_process "gnome-terminal.*Ally Drone"
-kill_process "gnome-terminal.*Enemy Drone"
-kill_process "gnome-terminal.*Camera Bridge"
-kill_process "gnome-terminal.*AirSim Camera Bridge"
-kill_process "gnome-terminal.*Detection Node"
-kill_process "gnome-terminal.*Tracking Node"
-kill_process "gnome-terminal.*Guidance Node"
-kill_process "gnome-terminal.*Enemy Movement"
-kill_process "gnome-terminal.*Enemy Drone Controller"
-kill_process "gnome-terminal.*PX4 Debug Translator"
-kill_process "gnome-terminal.*RViz2"
-kill_process "gnome-terminal.*Camera Viewer"
+# Kill terminal wrapper processes (bash processes stuck on 'read')
+echo -e "${YELLOW}Stopping terminal wrapper processes...${NC}"
+# These are the bash processes spawned by gnome-terminal with our colored headers
+kill_process "bash -c.*echo -e.*Press Enter to close"
+
+# Kill bash processes containing our launcher commands
+kill_process "bash -c.*ros2 launch bringup"
+kill_process "bash -c.*ros2 run.*visualizer"
+kill_process "bash -c.*ros2 run enemy_control"
+kill_process "bash -c.*ros2 run.*bridge"
+kill_process "bash -c.*MicroXRCEAgent"
+kill_process "bash -c.*px4"
+
+# Close orphaned terminal windows
+echo -e "${YELLOW}Closing orphaned terminal windows...${NC}"
+orphan_terminals=$(pgrep -f "gnome-terminal --title" 2>/dev/null)
+if [ ! -z "$orphan_terminals" ]; then
+    for pid in $orphan_terminals; do
+        children=$(pgrep -P $pid 2>/dev/null | wc -l)
+        if [ $children -eq 0 ] || [ $children -eq 1 ]; then
+            kill -TERM $pid 2>/dev/null
+            sleep 0.5
+            kill -KILL $pid 2>/dev/null
+        fi
+    done
+fi
 
 # Clean up temporary files
 echo -e "${YELLOW}Cleaning up temporary files...${NC}"
@@ -115,41 +125,43 @@ rm -f /tmp/test_annotated.jpg 2>/dev/null
 
 # Check for remaining processes
 echo -e "${GREEN}Checking for remaining processes...${NC}"
-remaining_px4=$(pgrep -c px4)
-remaining_gz=$(pgrep -c -f "gz\|gazebo\|ignition")
-remaining_airsim=$(pgrep -c -f "Blocks\|CityEnviron\|LandscapeMountains\|AirSim\|UE4\|UnrealEngine")
-remaining_agent=$(pgrep -c MicroXRCEAgent)
-remaining_camera_gz=$(pgrep -c -f "ros_gz_bridge\|ros2.*parameter_bridge")
-remaining_camera_airsim=$(pgrep -c airsim_camera_bridge)
-remaining_viz=$(pgrep -c -f "airsim_viz_translator\|px4_debug_translator")
-remaining_detection=$(pgrep -c detection_node)
-remaining_tracking=$(pgrep -c tracking_node)
-remaining_guidance=$(pgrep -c guidance_node)
-remaining_rviz=$(pgrep -c rviz2)
+remaining_px4=$(pgrep -c px4 2>/dev/null) || remaining_px4=0
+remaining_gz=$(pgrep -c -f "gz\|gazebo\|ignition" 2>/dev/null) || remaining_gz=0
+remaining_airsim=$(pgrep -c -f "Blocks\|CityEnviron\|LandscapeMountains\|AirSim\|UE4\|UnrealEngine" 2>/dev/null) || remaining_airsim=0
+remaining_agent=$(pgrep -c MicroXRCEAgent 2>/dev/null) || remaining_agent=0
+remaining_ros=$(pgrep -c -f "ros2.*launch\|ros2.*run.*visualizer\|ros2.*run.*bridge\|ros2.*run enemy_control" 2>/dev/null) || remaining_ros=0
+remaining_detection=$(pgrep -c detection_node 2>/dev/null) || remaining_detection=0
+remaining_tracking=$(pgrep -c tracking_node 2>/dev/null) || remaining_tracking=0
+remaining_guidance=$(pgrep -c guidance_node 2>/dev/null) || remaining_guidance=0
+remaining_rviz=$(pgrep -c rviz2 2>/dev/null) || remaining_rviz=0
+remaining_bash=$(pgrep -c -f "bash -c.*Press Enter to close" 2>/dev/null) || remaining_bash=0
+remaining_terminals=$(pgrep -c -f "gnome-terminal.*--title" 2>/dev/null) || remaining_terminals=0
 
 # Calculate total remaining
-total_remaining=$((remaining_px4 + remaining_gz + remaining_airsim + remaining_agent + \
-                   remaining_camera_gz + remaining_camera_airsim + remaining_viz + \
-                   remaining_detection + remaining_tracking + remaining_guidance + remaining_rviz))
+total_remaining=$((remaining_px4 + remaining_gz + remaining_airsim + remaining_agent + remaining_ros + \
+                   remaining_detection + remaining_tracking + remaining_guidance + remaining_rviz + \
+                   remaining_bash + remaining_terminals))
 
 if [ $total_remaining -eq 0 ]; then
-    echo -e "${GREEN}✓ All simulation processes successfully terminated${NC}"
+    echo -e "${GREEN}✓ All simulation processes and terminals successfully closed${NC}"
 else
     echo -e "${YELLOW}Warning: Some processes may still be running${NC}"
     [ $remaining_px4 -gt 0 ] && echo -e "${RED}  - $remaining_px4 PX4 process(es)${NC}"
     [ $remaining_gz -gt 0 ] && echo -e "${RED}  - $remaining_gz Gazebo/Ignition process(es)${NC}"
     [ $remaining_airsim -gt 0 ] && echo -e "${RED}  - $remaining_airsim AirSim/Unreal process(es)${NC}"
     [ $remaining_agent -gt 0 ] && echo -e "${RED}  - $remaining_agent MicroXRCE Agent process(es)${NC}"
-    [ $remaining_camera_gz -gt 0 ] && echo -e "${RED}  - $remaining_camera_gz Gazebo Camera Bridge process(es)${NC}"
-    [ $remaining_camera_airsim -gt 0 ] && echo -e "${RED}  - $remaining_camera_airsim AirSim Camera Bridge process(es)${NC}"
-    [ $remaining_viz -gt 0 ] && echo -e "${RED}  - $remaining_viz Debug Translator process(es)${NC}"
+    [ $remaining_ros -gt 0 ] && echo -e "${RED}  - $remaining_ros ROS2 process(es)${NC}"
     [ $remaining_detection -gt 0 ] && echo -e "${RED}  - $remaining_detection Detection Node process(es)${NC}"
     [ $remaining_tracking -gt 0 ] && echo -e "${RED}  - $remaining_tracking Tracking Node process(es)${NC}"
     [ $remaining_guidance -gt 0 ] && echo -e "${RED}  - $remaining_guidance Guidance Node process(es)${NC}"
     [ $remaining_rviz -gt 0 ] && echo -e "${RED}  - $remaining_rviz RViz2 process(es)${NC}"
+    [ $remaining_bash -gt 0 ] && echo -e "${RED}  - $remaining_bash stuck bash wrapper(s)${NC}"
+    [ $remaining_terminals -gt 0 ] && echo -e "${RED}  - $remaining_terminals terminal window(s)${NC}"
     echo ""
-    echo -e "${YELLOW}Run this command to check:${NC}"
-    echo -e "${YELLOW}ps aux | grep -E \"px4|gz|gazebo|ignition|AirSim|Blocks|UE4|MicroXRCE|airsim|detection_node|tracking_node|guidance_node|rviz2\"${NC}"
+    echo -e "${YELLOW}Manual cleanup commands:${NC}"
+    echo -e "${CYAN}  pkill -9 -f 'bash -c.*Press Enter to close'${NC}"
+    echo -e "${CYAN}  pkill -9 -f 'gnome-terminal'${NC}"
+    echo -e "${CYAN}  ps aux | grep -E 'px4|gz|ros2|bash -c' | grep -v grep${NC}"
 fi
 
 echo ""

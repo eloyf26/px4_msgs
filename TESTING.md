@@ -38,7 +38,7 @@ cd ~/drone_ws/Micro-XRCE-DDS-Agent/build
 cd ~/drone_ws/ws_ros2
 source /opt/ros/humble/setup.bash
 source install/setup.bash
-ros2 launch halcon1_bringup pipeline.launch.py
+ros2 launch bringup pipeline.launch.py
 ```
 **Expected Output:**
 - All 4 nodes start successfully
@@ -140,7 +140,7 @@ You should see x,y coordinates changing over time in oscillating pattern.
 - **No connection**: Check PX4 RTPS client settings
 
 ### ROS2 Issues
-- **Build errors**: Run `colcon build --allow-overriding halcon1_detection`
+- **Build errors**: Run `colcon build --allow-overriding detection`
 - **Topic not found**: Check node startup order, restart launch
 
 This testing procedure validates the complete Halcon1 system integration without requiring real camera input or complex algorithms.

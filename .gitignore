@@ -149,3 +149,5 @@ models/
 # Backup files
 *.orig
 *.rej
+# Symlinks organized in ws_ros2/src/symlinks/
+ws_ros2/src/symlinks/

@@ -1,0 +1,39 @@
+# Core Python Dependencies for Halcon1 System
+# Generated from analysis of all Python modules in the project
+
+# Deep Learning & Computer Vision
+ultralytics==8.3.204
+torch==2.8.0
+torchvision==0.23.0
+opencv-python==4.9.0.80
+opencv-contrib-python==4.9.0.80
+
+# Scientific Computing
+numpy==1.26.4
+scipy==1.15.3
+
+# Configuration & Data Processing
+PyYAML==6.0.3
+pyyaml>=6.0  # Alias for compatibility
+
+# ROS2 Python Client Libraries
+# Note: These are typically installed via rosdep/apt, not pip
+# Uncomment if you need to install them via pip in a virtual environment
+# rclpy
+# cv-bridge
+
+# Simulation
+airsim==1.8.1
+
+# Development & Testing
+pytest==6.2.5
+pytest-cov==3.0.0
+flake8==4.0.1
+
+# Build Tools (ROS2/Colcon)
+colcon-common-extensions==0.3.0
+empy==3.3.4
+
+# Additional utilities found in codebase
+pandas==2.3.3
+matplotlib==3.10.6

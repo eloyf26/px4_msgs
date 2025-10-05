@@ -1,1 +1,0 @@
-# AirSim Visualization Translator package

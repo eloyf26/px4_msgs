@@ -1,0 +1,20 @@
+<?xml version="1.0"?>
+<package format="3">
+  <name>bringup</name>
+  <version>0.0.0</version>
+  <description>Launch configurations for Halcon1 system</description>
+  <maintainer email="dev@halcon.com">Halcon Team</maintainer>
+  <license>Apache-2.0</license>
+
+  <exec_depend>detection</exec_depend>
+  <exec_depend>tracking</exec_depend>
+  <exec_depend>guidance</exec_depend>
+
+  <test_depend>ament_copyright</test_depend>
+  <test_depend>ament_flake8</test_depend>
+  <test_depend>ament_pep257</test_depend>
+
+  <export>
+    <build_type>ament_python</build_type>
+  </export>
+</package>

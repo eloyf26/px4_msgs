@@ -42,10 +42,13 @@ for arg in "$@"; do
             echo ""
             echo "Options:"
             echo "  --gazebo     Build Gazebo dependencies only (default)"
-            echo "  --airsim     Build AirSim dependencies only"
+            echo "  --airsim     Build AirSim dependencies + download environment (interactive)"
             echo "  --full       Build both Gazebo AND AirSim dependencies"
             echo "  --validate   Check what's installed and working"
             echo "  --help       Show this help message"
+            echo ""
+            echo "Note: AirSim installation includes an interactive menu to choose environment"
+            echo "      (Blocks, Landscape, or City). You can skip and install manually later."
             exit 0
             ;;
         *)
@@ -55,10 +58,131 @@ done
 
 echo "=== Halcon1 System Setup ==="
 
+# Function to verify Python dependencies
+verify_python_dependencies() {
+    local mode=$1  # "gazebo", "airsim", or "full"
+
+    echo "→ Verifying Python dependencies..."
+
+    local missing_packages=()
+    local version_issues=()
+
+    # Check Python 3
+    if ! command -v python3 &> /dev/null; then
+        echo "✗ Python 3 not found"
+        echo "  Install with: sudo apt install python3 python3-pip"
+        exit 1
+    fi
+
+    # Core dependencies (always required)
+    echo "  Checking core Python packages..."
+
+    # Check ultralytics
+    if ! python3 -c "import ultralytics" 2>/dev/null; then
+        missing_packages+=("ultralytics")
+    else
+        local version=$(python3 -c "import ultralytics; print(ultralytics.__version__)" 2>/dev/null)
+        echo "    ✓ ultralytics $version"
+    fi
+
+    # Check torch (ultralytics dependency)
+    if ! python3 -c "import torch" 2>/dev/null; then
+        missing_packages+=("torch")
+    else
+        local version=$(python3 -c "import torch; print(torch.__version__)" 2>/dev/null)
+        echo "    ✓ torch $version"
+    fi
+
+    # Check opencv
+    if ! python3 -c "import cv2" 2>/dev/null; then
+        missing_packages+=("opencv-python")
+    else
+        local version=$(python3 -c "import cv2; print(cv2.__version__)" 2>/dev/null)
+        echo "    ✓ opencv-python $version"
+    fi
+
+    # Check pyyaml
+    if ! python3 -c "import yaml" 2>/dev/null; then
+        missing_packages+=("PyYAML")
+    else
+        local version=$(python3 -c "import yaml; print(yaml.__version__)" 2>/dev/null)
+        echo "    ✓ PyYAML $version"
+    fi
+
+    # Check numpy
+    if ! python3 -c "import numpy" 2>/dev/null; then
+        missing_packages+=("numpy")
+    else
+        local version=$(python3 -c "import numpy; print(numpy.__version__)" 2>/dev/null)
+        echo "    ✓ numpy $version"
+    fi
+
+    # Check scipy
+    if ! python3 -c "import scipy" 2>/dev/null; then
+        missing_packages+=("scipy")
+    else
+        local version=$(python3 -c "import scipy; print(scipy.__version__)" 2>/dev/null)
+        echo "    ✓ scipy $version"
+    fi
+
+    # AirSim-specific dependencies
+    if [ "$mode" = "airsim" ] || [ "$mode" = "full" ]; then
+        echo "  Checking AirSim Python packages..."
+
+        # Check airsim
+        if ! python3 -c "import airsim" 2>/dev/null; then
+            missing_packages+=("airsim")
+        else
+            echo "    ✓ airsim installed"
+        fi
+
+        # Check msgpack-rpc-python
+        if ! python3 -c "import msgpackrpc" 2>/dev/null; then
+            missing_packages+=("msgpack-rpc-python")
+        else
+            echo "    ✓ msgpack-rpc-python installed"
+        fi
+    fi
+
+    # Report results
+    if [ ${#missing_packages[@]} -gt 0 ]; then
+        echo ""
+        echo "✗ Missing Python packages detected:"
+        for pkg in "${missing_packages[@]}"; do
+            echo "  - $pkg"
+        done
+        echo ""
+        echo "Install missing packages with:"
+        if [ "$mode" = "airsim" ] || [ "$mode" = "full" ]; then
+            echo "  pip3 install -r requirements.txt"
+        else
+            echo "  pip3 install ${missing_packages[@]}"
+        fi
+        echo ""
+        read -p "Install missing packages now? (y/n): " -n 1 -r
+        echo
+        if [[ $REPLY =~ ^[Yy]$ ]]; then
+            echo "→ Installing Python packages..."
+            if [ "$mode" = "airsim" ] || [ "$mode" = "full" ]; then
+                pip3 install -r requirements.txt
+                pip3 install msgpack-rpc-python
+            else
+                pip3 install ${missing_packages[@]}
+            fi
+            echo "✓ Python packages installed"
+        else
+            echo "✗ Cannot continue without required Python packages"
+            exit 1
+        fi
+    else
+        echo "  ✓ All required Python packages installed"
+    fi
+}
+
 # Handle validation mode
 if [ "$VALIDATE_ONLY" = true ]; then
     echo "→ Running validation checks..."
-    exec "$SCRIPT_DIR/scripts/validate_setup.sh"
+    exec "$SCRIPT_DIR/scripts/validate.sh"
     exit $?
 fi
 
@@ -150,38 +274,45 @@ rosdep update
 rosdep resolve gz-harmonic
 echo "✓ Rosdep rules for Gazebo Harmonic installed"
 
-# 8. Clone ros_gz from source (humble branch)
-echo "→ Ensuring ros_gz source (humble branch)..."
-if [ -d "ws_ros2/src/ros_gz/.git" ]; then
-    echo "↷ ros_gz already present; skipping clone"
-else
-    echo "→ Cloning ros_gz from source (humble branch)..."
-    cd ws_ros2/src
-    git clone https://github.com/gazebosim/ros_gz.git -b humble
-    cd "$SCRIPT_DIR"
-    echo "✓ ros_gz cloned from humble branch"
+# 8. Clone ros_gz from source (humble branch) to simulation/gazebo/bridges/
+if [ "$INSTALL_GAZEBO" = true ]; then
+    echo "→ Ensuring ros_gz source (humble branch)..."
+    if [ -d "simulation/gazebo/bridges/.git" ]; then
+        echo "↷ ros_gz already present; skipping clone"
+    else
+        echo "→ Cloning ros_gz from source (humble branch)..."
+        mkdir -p simulation/gazebo
+        cd simulation/gazebo
+        git clone https://github.com/gazebosim/ros_gz.git -b humble bridges
+        cd "$SCRIPT_DIR"
+        echo "✓ ros_gz cloned from humble branch"
+    fi
+    export GZ_VERSION=harmonic # Required for building ros_gz in step 10
+    echo "✓ GZ_VERSION=harmonic exported"
 fi
-export GZ_VERSION=harmonic # Required for building ros_gz in step 10
-echo "✓ GZ_VERSION=harmonic exported"
 
 # Install rqt_image_view and cv_bridge for visualizing camera images
 sudo apt update
 sudo apt install -y ros-humble-rqt-image-view ros-humble-cv-bridge
 
-# Install Python dependencies system-wide for detection node
-echo "→ Installing Python dependencies for detection node..."
+# Install Python dependencies from centralized requirements.txt
+echo "→ Installing Python dependencies..."
 pip3 install --upgrade pip
-pip3 install -r ws_ros2/src/Halcon1/modules/halcon1_detection/requirements.txt
-echo "✓ Python dependencies installed system-wide"
 
-# Install AirSim Python dependencies (optional)
 if [ "$INSTALL_AIRSIM" = true ]; then
-    echo "→ Installing AirSim Python dependencies..."
-    pip3 install msgpack-rpc-python
-    pip3 install airsim
-    echo "✓ AirSim Python dependencies installed"
+    echo "  Installing all dependencies (including AirSim)..."
+    pip3 install -r requirements.txt
+    pip3 install msgpack-rpc-python  # Additional AirSim dependency
+    echo "✓ All Python dependencies installed (including AirSim)"
 else
-    echo "↷ Skipping AirSim Python dependencies (use --airsim to enable)"
+    echo "  Installing core dependencies (excluding AirSim)..."
+    # Install everything except airsim
+    pip3 install ultralytics torch torchvision opencv-python opencv-contrib-python
+    pip3 install numpy scipy PyYAML
+    pip3 install pytest pytest-cov flake8
+    pip3 install colcon-common-extensions empy
+    echo "✓ Core Python dependencies installed"
+    echo "↷ Skipping AirSim dependencies (use --airsim to enable)"
 fi
 
 # 9. Build ROS2 workspace
@@ -203,39 +334,136 @@ echo "→ Building ROS2 packages..."
 cd ws_ros2
 source /opt/ros/humble/setup.bash
 
+# Verify Python dependencies before building
+if [ "$INSTALL_GAZEBO" = true ] && [ "$INSTALL_AIRSIM" = true ]; then
+    verify_python_dependencies "full"
+elif [ "$INSTALL_AIRSIM" = true ]; then
+    verify_python_dependencies "airsim"
+else
+    verify_python_dependencies "gazebo"
+fi
+
+# Clean up old directories from pre-reorganization
+echo "→ Cleaning up old package directories..."
+if [ -d "src/airsim" ]; then
+    echo "  ↷ Removing old airsim directory..."
+    rm -rf src/airsim
+fi
+# Remove duplicate PX4 packages (they should only be in px4_bridges/)
+for pkg in px4_msgs px4-offboard px4_ros_com; do
+    if [ -d "src/$pkg" ]; then
+        echo "  ↷ Removing duplicate $pkg directory (using px4_bridges/ instead)..."
+        rm -rf "src/$pkg"
+    fi
+done
+
+# Clean up old builds from renamed packages (halcon1_* → *)
+echo "→ Cleaning up old package builds from rename..."
+if [ -d "build/halcon1_detection" ] || [ -d "install/halcon1_detection" ]; then
+    echo "  ↷ Removing old halcon1_* build and install directories..."
+    rm -rf build/halcon1_* install/halcon1_*
+    echo "  ✓ Old package builds removed"
+fi
+
+echo "  ✓ Cleanup complete"
+
+# Create organized symlinks structure
+echo "→ Creating organized symlinks for external packages..."
+mkdir -p src/symlinks/gazebo src/symlinks/airsim
+
+# Clean up old symlinks if they exist
+for old_symlink in ros_gz adversarial camera_bridge viz_translator; do
+    if [ -L "src/$old_symlink" ]; then
+        echo "  ↷ Removing old symlink: src/$old_symlink"
+        rm "src/$old_symlink"
+    fi
+done
+
+# Common simulation packages
+if [ ! -L "src/symlinks/enemy_control" ]; then
+    ln -sf ../../../simulation/common/debug/enemy_control src/symlinks/enemy_control
+    echo "  ✓ Created symlink for enemy_control"
+fi
+
+# Gazebo-specific packages
+if [ ! -L "src/symlinks/gazebo/enemy_visualizer" ]; then
+    ln -sf ../../../../simulation/gazebo/debug/enemy_visualizer src/symlinks/gazebo/enemy_visualizer
+    echo "  ✓ Created symlink for enemy_visualizer (Gazebo)"
+fi
+
+if [ ! -L "src/symlinks/gazebo/ros_gz" ]; then
+    ln -sf ../../../../simulation/gazebo/bridges src/symlinks/gazebo/ros_gz
+    echo "  ✓ Created symlink for ros_gz"
+fi
+
+# AirSim-specific packages (created later if --airsim enabled)
+
+echo "  ✓ Symlinks structure created"
+
 # 10. Build in correct order
-echo "→ Building packages in correct order..."
-colcon build --packages-select ros_gz_interfaces
-colcon build --packages-select ros_gz_sim
-colcon build --packages-select ros_gz_bridge
-colcon build --packages-select ros_gz_image
-colcon build --packages-select ros_gz_sim_demos
-colcon build --packages-select ros_gz
-colcon build --packages-select halcon1_msgs
-colcon build --packages-select halcon1_types
-colcon build --packages-select halcon1_utils
-colcon build --packages-select px4_msgs px4_ros_com
-colcon build --packages-select multi_drone_sim
-colcon build --packages-select airsim_viz_translator
-colcon build --packages-select halcon1_detection halcon1_tracking halcon1_guidance
-colcon build --packages-select halcon1_bringup px4_offboard
+
+# Build Gazebo packages if requested
+if [ "$INSTALL_GAZEBO" = true ]; then
+    echo "→ Building Gazebo packages..."
+
+    colcon build --packages-select ros_gz_interfaces
+    colcon build --packages-select ros_gz_sim
+    colcon build --packages-select ros_gz_bridge
+    colcon build --packages-select ros_gz_image
+    colcon build --packages-select ros_gz_sim_demos
+    colcon build --packages-select ros_gz
+
+    # Build Gazebo visualizer
+    echo "→ Building Gazebo enemy visualizer..."
+    colcon build --packages-select enemy_visualizer
+    echo "  ✓ Gazebo packages built"
+else
+    echo "↷ Skipping Gazebo packages (use --gazebo or --full to enable)"
+fi
+
+# Build enemy control (common across simulators)
+echo "→ Building enemy control..."
+colcon build --packages-select enemy_control
+echo "  ✓ Enemy control built"
+
+# Build PX4 messages first (required by detection/tracking/guidance)
+echo "→ Building PX4 message definitions..."
+colcon build --packages-select px4_msgs
+
+# Build core packages
+echo "→ Building core Halcon1 packages..."
+colcon build --packages-select msgs
+colcon build --packages-select common_types transforms algorithms
+colcon build --packages-select detection tracking guidance
+colcon build --packages-select ally_visualizer
+colcon build --packages-select bringup
+
+# Skip PX4 bridge packages (no longer needed)
+# px4_ros_com and px4_offboard were removed as unused
 
 # Build AirSim packages (optional)
 if [ "$INSTALL_AIRSIM" = true ]; then
-    echo "→ Preparing AirSim packages..."
-    # Ignore C++ packages we don't use (we use Python bridge instead)
-    touch "$SCRIPT_DIR/ws_ros2/src/airsim/ros2/src/airsim_ros_pkgs/COLCON_IGNORE" 2>/dev/null || true
+    echo "→ Building AirSim packages..."
 
-    echo "→ Building AirSim camera bridge..."
-    cd "$SCRIPT_DIR/ws_ros2"
-    source /opt/ros/humble/setup.bash
-    colcon build --packages-select airsim_camera_bridge
-    echo "✓ AirSim camera bridge built"
+    # Create AirSim symlinks
+    if [ ! -L "src/symlinks/airsim/camera_bridge" ]; then
+        ln -sf ../../../simulation/airsim/debug/camera_bridge src/symlinks/airsim/camera_bridge
+        echo "  ✓ Created symlink for camera_bridge"
+    fi
+
+    if [ ! -L "src/symlinks/airsim/viz_translator" ]; then
+        ln -sf ../../../simulation/airsim/debug/viz_translator src/symlinks/airsim/viz_translator
+        echo "  ✓ Created symlink for viz_translator"
+    fi
+
+    colcon build --packages-select camera_bridge
+    colcon build --packages-select viz_translator
+    echo "  ✓ AirSim packages built"
 
     # Copy AirSim settings.json to user directory
     echo "→ Setting up AirSim configuration..."
     AIRSIM_CONFIG_DIR="$HOME/Documents/AirSim"
-    AIRSIM_SETTINGS="$SCRIPT_DIR/config/airsim/settings.json"
+    AIRSIM_SETTINGS="$SCRIPT_DIR/simulation/airsim/config/settings.json"
 
     mkdir -p "$AIRSIM_CONFIG_DIR"
 
@@ -255,6 +483,84 @@ if [ "$INSTALL_AIRSIM" = true ]; then
             echo "  ⚠ Warning: settings.json may have syntax errors"
         fi
     fi
+
+    # AirSim Environment Installation Menu
+    echo ""
+    echo "=== AirSim Environment Setup ==="
+    echo "AirSim requires a pre-built Unreal Engine environment to run."
+    echo ""
+    echo "Choose an environment to download:"
+    echo "  1) Blocks          (~400MB, fast, simple testing)"
+    echo "  2) Landscape       (~5GB, realistic outdoor)"
+    echo "  3) City            (~8GB, urban environment)"
+    echo "  4) Skip            (install manually later)"
+    echo ""
+    read -p "Enter choice [1-4] (default: 1): " env_choice
+
+    case "${env_choice:-1}" in
+        1)
+            ENV_NAME="Blocks"
+            ENV_URL="https://github.com/microsoft/AirSim/releases/download/v1.8.1/Blocks.zip"
+            ENV_SIZE="~400MB"
+            ENV_DIR="LinuxBlocks1.8.1"
+            ENV_EXEC="Blocks.sh"
+            ;;
+        2)
+            ENV_NAME="Landscape"
+            ENV_URL="https://github.com/microsoft/AirSim/releases/download/v1.8.1/LandscapeMountains.zip"
+            ENV_SIZE="~5GB"
+            ENV_DIR="LandscapeMountains"
+            ENV_EXEC="LandscapeMountains.sh"
+            ;;
+        3)
+            ENV_NAME="City"
+            ENV_URL="https://github.com/microsoft/AirSim/releases/download/v1.8.1/CityEnviron.zip"
+            ENV_SIZE="~8GB"
+            ENV_DIR="CityEnviron"
+            ENV_EXEC="CityEnviron.sh"
+            ;;
+        4)
+            echo "↷ Skipping AirSim environment installation"
+            ENV_NAME=""
+            ;;
+        *)
+            echo "⚠ Invalid choice, defaulting to Blocks"
+            ENV_NAME="Blocks"
+            ENV_URL="https://github.com/microsoft/AirSim/releases/download/v1.8.1/Blocks.zip"
+            ENV_SIZE="~400MB"
+            ENV_DIR="LinuxBlocks1.8.1"
+            ENV_EXEC="Blocks.sh"
+            ;;
+    esac
+
+    # Download and install if not skipped
+    if [ -n "$ENV_NAME" ]; then
+        AIRSIM_ENV_DIR="$HOME/AirSimEnvironments"
+        echo ""
+        echo "→ Installing AirSim ${ENV_NAME} environment (${ENV_SIZE})..."
+
+        mkdir -p "$AIRSIM_ENV_DIR"
+        cd "$AIRSIM_ENV_DIR"
+
+        if [ -d "$ENV_DIR" ]; then
+            echo "  ✓ ${ENV_NAME} already installed at $AIRSIM_ENV_DIR/$ENV_DIR"
+        else
+            echo "  → Downloading ${ENV_NAME}... (this may take a while)"
+            wget --progress=bar:force "$ENV_URL" -O "${ENV_NAME}.zip"
+
+            echo "  → Extracting..."
+            unzip -q "${ENV_NAME}.zip"
+            rm "${ENV_NAME}.zip"
+
+            chmod +x "${ENV_DIR}/LinuxNoEditor/${ENV_EXEC}"
+            echo "  ✓ ${ENV_NAME} installed successfully"
+        fi
+
+        cd "$SCRIPT_DIR"
+        AIRSIM_ENV_INSTALLED="$AIRSIM_ENV_DIR/$ENV_DIR/LinuxNoEditor/$ENV_EXEC"
+    fi
+else
+    echo "↷ Skipping AirSim packages (use --airsim or --full to enable)"
 fi
 
 cd "$SCRIPT_DIR"
@@ -262,46 +568,52 @@ cd "$SCRIPT_DIR"
 # 11. Make all scripts executable
 echo "→ Making scripts executable..."
 chmod +x scripts/*.sh
-chmod +x rebuild.sh
 echo "✓ All scripts are now executable"
 
 echo "=== Setup Complete ==="
 echo ""
 
+echo "🚀 Launch the system:"
+echo ""
+echo "  Unified Launcher (recommended):"
+echo "    ./scripts/launch.sh --sim gazebo         # Launch with Gazebo"
+echo "    ./scripts/launch.sh --sim airsim         # Launch with AirSim"
+echo "    ./scripts/launch.sh --sim gazebo --debug # With RViz2 visualization"
+echo "    ./scripts/launch.sh --sim gazebo --mode multi  # Multi-drone simulation"
+echo ""
+echo "  Validation:"
+echo "    ./scripts/launch.sh --sim gazebo --validate    # Check Gazebo installation"
+echo "    ./scripts/launch.sh --sim airsim --validate    # Check AirSim installation"
+echo "    ./scripts/launch.sh --list-sims                # List available simulators"
+echo ""
+
 if [ "$INSTALL_AIRSIM" = true ]; then
-    echo "🚀 To use the system with AirSim:"
+    echo "  AirSim Setup:"
+    if [ -n "$AIRSIM_ENV_INSTALLED" ]; then
+        echo "    1. Launch AirSim: cd $(dirname "$AIRSIM_ENV_INSTALLED") && ./$(basename "$AIRSIM_ENV_INSTALLED")"
+        echo "    2. In another terminal: ./scripts/launch.sh --sim airsim"
+    else
+        echo "    1. Download environment: ./scripts/install_airsim_env.sh --blocks"
+        echo "    2. Launch AirSim: cd ~/AirSimEnvironments/<env>/ && ./<env>.sh"
+        echo "    3. In another terminal: ./scripts/launch.sh --sim airsim"
+    fi
     echo ""
-    echo "  1. Download AirSim environment (if not already done):"
-    echo "     ./scripts/install_airsim_env.sh --blocks     # Fast, ~400MB (recommended for testing)"
-    echo "     ./scripts/install_airsim_env.sh --landscape  # Realistic outdoor, ~5GB"
-    echo "     ./scripts/install_airsim_env.sh --city       # Urban environment, ~8GB"
+    echo "  ✓ AirSim configured at ~/Documents/AirSim/settings.json"
+    echo "  📖 See: simulation/airsim/README.md"
     echo ""
-    echo "  2. Launch AirSim environment:"
-    echo "     cd ~/AirSimEnvironments/LinuxBlocks1.8.1/LinuxNoEditor"
-    echo "     ./Blocks.sh"
+fi
+
+if [ "$INSTALL_GAZEBO" = true ]; then
+    echo "  Gazebo Setup:"
+    echo "    Just run: ./scripts/launch.sh --sim gazebo"
     echo ""
-    echo "  3. In another terminal, launch AirSim ROS2 bridge:"
-    echo "     ./scripts/launch_airsim.sh"
-    echo ""
-    echo "  ✓ AirSim settings.json already configured at ~/Documents/AirSim/"
-    echo ""
-    echo "  For more details, see: config/airsim/README.md"
-    echo ""
-else
-    echo "🚀 To use the system with Gazebo:"
-    echo ""
-    echo "  1. Terminal 1: ./scripts/launch_px4.sh           # PX4 SITL with x500_mono_cam"
-    echo "  2. Terminal 2: ./scripts/launch_agent.sh         # MicroXRCE Agent (bridge PX4 → ROS2)"
-    echo "  3. Terminal 3: ./scripts/launch_camera_bridge.sh # Camera bridge (Gazebo → ROS2)"
-    echo "  4. Terminal 4: ./scripts/launch_halcon1.sh       # Halcon1 ROS2 nodes Pipeline"
-    echo "  5. (Optional - to visualize camera images) Terminal 5: ros2 run rqt_image_view  rqt_image_view"
-    echo ""
-    echo "  To add AirSim support later, run: ./setup.sh --airsim"
+    echo "  📖 See: simulation/gazebo/README.md"
     echo ""
 fi
 
 echo "🔧 Development Tools:"
-echo "  ./rebuild.sh                                     # Quick rebuild after code changes"
+echo "  cd ws_ros2 && colcon build --packages-select <package_name>"
+echo "  cd ws_ros2 && colcon build                      # Rebuild all packages"
 echo ""
 echo "📊 Available ROS2 Topics:"
 echo "  /camera/image       - Camera images (sensor_msgs/Image)"
