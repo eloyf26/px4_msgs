@@ -274,14 +274,14 @@ rosdep update
 rosdep resolve gz-harmonic
 echo "✓ Rosdep rules for Gazebo Harmonic installed"
 
-# 8. Verify ros_gz submodule (should already exist in src/ros2/external/)
+# 8. Verify ros_gz submodule (should already exist in src/ros2/simulation/gazebo/bridges/)
 if [ "$INSTALL_GAZEBO" = true ]; then
     echo "→ Checking ros_gz submodule..."
-    if [ -d "src/ros2/external/ros_gz/.git" ]; then
+    if [ -d "src/ros2/simulation/gazebo/bridges/ros_gz/.git" ]; then
         echo "✓ ros_gz submodule present"
     else
         echo "→ Initializing ros_gz submodule..."
-        git submodule update --init --recursive src/ros2/external/ros_gz
+        git submodule update --init --recursive src/ros2/simulation/gazebo/bridges/ros_gz
         echo "✓ ros_gz submodule initialized"
     fi
     export GZ_VERSION=harmonic # Required for building ros_gz in step 10
@@ -350,44 +350,69 @@ echo "  ✓ Cleanup complete"
 
 # 10. Build in correct order
 
+# Build PX4 messages FIRST (required by everything)
+echo "→ Building PX4 message definitions..."
+colcon build --packages-select px4_msgs
+source install/setup.bash
+echo "  ✓ PX4 messages built"
+
 # Build Gazebo packages if requested
 if [ "$INSTALL_GAZEBO" = true ]; then
     echo "→ Building Gazebo packages..."
 
     colcon build --packages-select ros_gz_interfaces
-    colcon build --packages-select ros_gz_sim
-    colcon build --packages-select ros_gz_bridge
-    colcon build --packages-select ros_gz_image
-    colcon build --packages-select ros_gz_sim_demos
-    colcon build --packages-select ros_gz
+    source install/setup.bash
 
-    # Build Gazebo visualizer
-    echo "→ Building Gazebo enemy visualizer..."
-    colcon build --packages-select enemy_visualizer
-    echo "  ✓ Gazebo packages built"
+    colcon build --packages-select ros_gz_sim
+    source install/setup.bash
+
+    colcon build --packages-select ros_gz_bridge
+    source install/setup.bash
+
+    colcon build --packages-select ros_gz_image
+    source install/setup.bash
+
+    colcon build --packages-select ros_gz_sim_demos
+    source install/setup.bash
+
+    colcon build --packages-select ros_gz
+    source install/setup.bash
+
+    echo "  ✓ ros_gz packages built"
 else
     echo "↷ Skipping Gazebo packages (use --gazebo or --full to enable)"
 fi
 
-# Build Gazebo enemy control and visualizer
-if [ "$INSTALL_GAZEBO" = true ]; then
-    echo "→ Building Gazebo-specific packages..."
-    colcon build --packages-select gazebo_enemy_control
-    colcon build --packages-select gazebo_enemy_visualizer
-    echo "  ✓ Gazebo-specific packages built"
-fi
-
-# Build PX4 messages first (required by detection/tracking/guidance)
-echo "→ Building PX4 message definitions..."
-colcon build --packages-select px4_msgs
-
-# Build core packages
+# Build core packages (depend on px4_msgs)
 echo "→ Building core Halcon1 packages..."
 colcon build --packages-select msgs
+source install/setup.bash
+
 colcon build --packages-select common_types transforms algorithms
+source install/setup.bash
+
 colcon build --packages-select detection tracking guidance
+source install/setup.bash
+
 colcon build --packages-select ally_visualizer
+source install/setup.bash
+
 colcon build --packages-select bringup
+source install/setup.bash
+
+echo "  ✓ Core packages built"
+
+# Build Gazebo-specific simulation packages (depend on px4_msgs)
+if [ "$INSTALL_GAZEBO" = true ]; then
+    echo "→ Building Gazebo simulation packages..."
+    colcon build --packages-select gazebo_enemy_control
+    source install/setup.bash
+
+    colcon build --packages-select gazebo_enemy_visualizer
+    source install/setup.bash
+
+    echo "  ✓ Gazebo simulation packages built"
+fi
 
 # Skip PX4 bridge packages (no longer needed)
 # px4_ros_com and px4_offboard were removed as unused

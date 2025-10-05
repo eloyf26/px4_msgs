@@ -4,8 +4,8 @@
 [submodule "external/Micro-XRCE-DDS-Agent"]
 	path = external/Micro-XRCE-DDS-Agent
 	url = https://github.com/eProsima/Micro-XRCE-DDS-Agent.git
-[submodule "src/ros2/external/ros_gz"]
-	path = src/ros2/external/ros_gz
+[submodule "src/ros2/simulation/gazebo/bridges/ros_gz"]
+	path = src/ros2/simulation/gazebo/bridges/ros_gz
 	url = https://github.com/gazebosim/ros_gz.git
 	branch = humble
 [submodule "src/ros2/external/px4_msgs"]
