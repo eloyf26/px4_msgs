@@ -125,9 +125,15 @@ check_status "camera_bridge built" \
     "Run: ./setup.sh --airsim" \
     true
 
-check_status "viz_translator built" \
-    "test -d $REPO_ROOT/install/viz_translator" \
-    "viz_translator not built" \
+check_status "airsim_enemy_control built" \
+    "test -d $REPO_ROOT/install/airsim_enemy_control" \
+    "airsim_enemy_control not built" \
+    "Run: ./setup.sh --airsim" \
+    true
+
+check_status "airsim_enemy_visualizer built" \
+    "test -d $REPO_ROOT/install/airsim_enemy_visualizer" \
+    "airsim_enemy_visualizer not built" \
     "Run: ./setup.sh --airsim" \
     true
 
