@@ -541,15 +541,13 @@ echo ""
 echo "🚀 Launch the system:"
 echo ""
 echo "  Unified Launcher (recommended):"
-echo "    ./scripts/launch.sh --sim gazebo         # Launch with Gazebo"
-echo "    ./scripts/launch.sh --sim airsim         # Launch with AirSim"
-echo "    ./scripts/launch.sh --sim gazebo --debug # With RViz2 visualization"
-echo "    ./scripts/launch.sh --sim gazebo --mode multi  # Multi-drone simulation"
+echo "    ./scripts/launch.sh --sim gazebo              # Launch with Gazebo"
+echo "    ./scripts/launch.sh --sim airsim              # Launch with AirSim"
+echo "    ./scripts/launch.sh --sim gazebo --debug      # With RViz2 visualization"
+echo "    ./scripts/launch.sh --sim gazebo --mode multi # Multi-drone simulation"
 echo ""
 echo "  Validation:"
-echo "    ./scripts/launch.sh --sim gazebo --validate    # Check Gazebo installation"
-echo "    ./scripts/launch.sh --sim airsim --validate    # Check AirSim installation"
-echo "    ./scripts/launch.sh --list-sims                # List available simulators"
+echo "    ./scripts/validate.sh                         # Check installation status"
 echo ""
 
 if [ "$INSTALL_AIRSIM" = true ]; then
@@ -564,15 +562,12 @@ if [ "$INSTALL_AIRSIM" = true ]; then
     fi
     echo ""
     echo "  ✓ AirSim configured at ~/Documents/AirSim/settings.json"
-    echo "  📖 See: simulation/airsim/README.md"
     echo ""
 fi
 
 if [ "$INSTALL_GAZEBO" = true ]; then
     echo "  Gazebo Setup:"
     echo "    Just run: ./scripts/launch.sh --sim gazebo"
-    echo ""
-    echo "  📖 See: simulation/gazebo/README.md"
     echo ""
 fi
 
