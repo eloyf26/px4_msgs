@@ -1,19 +1,20 @@
 # Halcon1 - Autonomous Drone Interception System
 
-Complete autonomous drone interception system with simulation support (Gazebo, AirSim) and PX4 integration.
+[![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
+[![ROS2](https://img.shields.io/badge/ROS2-Humble-green.svg)](https://docs.ros.org/en/humble/)
+[![Python](https://img.shields.io/badge/Python-3.10+-yellow.svg)](https://www.python.org/)
+
+Autonomous drone interception system with PX4 SITL integration and ROS2 pipeline.
 
 ## Overview
 
 Halcon1 implements a three-stage pipeline for autonomous drone interception:
 
-**Detection → Tracking → Guidance**
+```
+Detection (YOLOv11n) → Tracking (Camera Transform) → Guidance (Kalman + ProNav)
+```
 
-**Key Features:**
-- 🎯 YOLO-based drone detection
-- 📍 Camera-to-world coordinate transformation
-- 🚀 Kalman Filter + Proportional Navigation guidance
-- 🔄 Simulator-agnostic architecture (Gazebo, AirSim, Isaac Sim)
-- ✈️ PX4 flight controller integration (works on real hardware!)
+**Core principle:** The same code runs on Gazebo, AirSim, and real hardware without changes. Only the simulator/sensor backend changes - all Halcon1 nodes remain identical.
 
 ## Quick Start
 
@@ -22,293 +23,160 @@ Halcon1 implements a three-stage pipeline for autonomous drone interception:
 - Ubuntu 22.04
 - ROS2 Humble
 - Python 3.10+
-- ~2GB disk space
 
-### 1. Install
+### Installation
 
 ```bash
-# Clone with submodules
+# Clone repository with submodules
 git clone --recursive https://github.com/eloyf26/halcon1-system.git
 cd halcon1-system
 
-# Setup for Gazebo (fast, lightweight)
+# Install for Gazebo (recommended)
 ./setup.sh --gazebo
 
-# OR setup for AirSim (photo-realistic)
+# OR install for AirSim
 ./setup.sh --airsim
 
-# OR setup for both
+# OR install both
 ./setup.sh --full
 ```
 
-### 2. Launch Simulation
+**Time:** ~15-20 minutes
+**Details:** [Installation Guide](docs/INSTALLATION.md)
 
-**Gazebo (Recommended for Development)**
+### Launch
+
+**Gazebo:**
 ```bash
-./scripts/launch.sh --sim gazebo
+./scripts/launch.sh --sim gazebo --mode multi --debug
 ```
 
-**AirSim (Photo-Realistic)**
+**AirSim:**
 ```bash
-# First, launch AirSim environment manually:
-cd ~/AirSimEnvironments/Blocks/
-./Blocks.sh
+# Terminal 1: Start AirSim environment
+~/AirSimEnvironments/Blocks/Blocks.sh
 
-# Then launch Halcon1:
+# Terminal 2: Start Halcon1
 ./scripts/launch.sh --sim airsim
 ```
 
-**With Debug Mode (RViz2)**
-```bash
-./scripts/launch.sh --sim gazebo --debug
-```
+**Launch options:**
+- `--sim gazebo|airsim` - Simulator to use
+- `--mode single|multi` - Single drone or ally vs enemy
+- `--debug` - Enable RViz markers and debug visualization
 
-**Multi-Drone (Ally vs Enemy)**
-```bash
-./scripts/launch.sh --sim gazebo --mode multi
-```
-
-### 3. Monitor System
+### Verify
 
 ```bash
+# Check topics are publishing
+ros2 topic hz /camera/image        # ~30 Hz
+ros2 topic hz /enemy/detection     # ~10 Hz
+ros2 topic hz /enemy/pose          # ~10 Hz
+
 # View camera feed
 ros2 run rqt_image_view rqt_image_view
-
-# Check detection output
-ros2 topic echo /enemy/detection
-
-# Check tracking output
-ros2 topic echo /enemy/tracked
-
-# Check guidance commands
-ros2 topic echo /fmu/in/trajectory_setpoint
 ```
 
 ## System Architecture
 
-Halcon1 uses a **simulator-agnostic** architecture:
-
 ```
-┌─────────────────────────────────────────────────────────────┐
-│ Halcon1 ROS2 Nodes (SAME CODE for all environments!)      │
-│  - Detection: YOLO drone detection                         │
-│  - Tracking: Camera → world coordinate transform           │
-│  - Guidance: Kalman Filter + Proportional Navigation       │
-└────────────┬────────────────────────────────────────────────┘
-             │ Standard ROS2 Topics
-             │ (/camera/image, /fmu/in/*, /fmu/out/*)
+┌──────────────────────────────────────────────────────────────┐
+│ SIMULATOR / HARDWARE                                         │
+│  Gazebo | AirSim | Real Hardware                            │
+└────────────┬──────────────────────────┬──────────────────────┘
+             │ MAVLink                  │ Camera Topics
+             ↓                          ↓
+┌─────────────────────┐      ┌─────────────────────────────────┐
+│ PX4 SITL/Firmware   │      │ Camera Bridge                   │
+│ (Flight Controller) │      │ (ros_gz/airsim/usb_cam)         │
+└──────────┬──────────┘      └──────────┬──────────────────────┘
+           │ uXRCE-DDS                  │
+           ↓                            ↓
+┌──────────────────────────────────────────────────────────────┐
+│ ROS2 Network (Standard Topics)                               │
+│  /fmu/out/vehicle_odometry, /fmu/in/trajectory_setpoint      │
+│  /camera/image, /camera/camera_info                          │
+└────────────┬─────────────────────────────────────────────────┘
              ↓
-┌─────────────────────────────────────────────────────────────┐
-│ Simulation Engine (Gazebo OR AirSim OR Isaac OR Hardware) │
-│  - Physics simulation                                       │
-│  - Sensor simulation (camera, IMU, GPS)                    │
-│  - PX4 SITL connection                                     │
+┌──────────────────────────────────────────────────────────────┐
+│ Halcon1 Pipeline (Simulator-Agnostic)                        │
+│                                                               │
+│  detection_node → tracking_node → guidance_node              │
+│  (YOLOv11n)       (Transforms)     (Kalman+ProNav)           │
 └──────────────────────────────────────────────────────────────┘
 ```
 
-**Key Insight**: Your detection, tracking, and guidance code works identically in simulation and real hardware!
+**Data flow:**
+1. Camera → YOLO detection (2D bounding box)
+2. Detection + PX4 odometry → World coordinates (3D position)
+3. Kalman filter prediction → ProNav guidance (acceleration commands)
+4. Commands → PX4 → Motors
 
-## Documentation
+**See:** [Architecture](docs/ARCHITECTURE.md) for detailed diagram
 
-### Getting Started
-- [Installation Guide](docs/INSTALLATION.md) - Detailed setup instructions
-- [Simulation Guide](docs/SIMULATION.md) - How to use simulators
-
-### Understanding the System
-- [Architecture](docs/ARCHITECTURE.md) - System design and data flow
-- [Development Guide](docs/DEVELOPMENT.md) - Contributing and extending
-
-### Simulator-Specific
-- [Gazebo Setup](simulation/gazebo/README.md) - Fast, lightweight simulator
-- [AirSim Setup](simulation/airsim/README.md) - Photo-realistic simulator
-- [Isaac Sim Plans](simulation/isaac/README.md) - GPU-accelerated (planned)
-
-## Repository Structure
+## Project Structure
 
 ```
 halcon1-system/
-├── simulation/              # Simulation engine implementations
-│   ├── common/             # Unified launcher + interfaces
-│   ├── gazebo/             # Gazebo-specific config
-│   ├── airsim/             # AirSim-specific config
-│   └── isaac/              # Isaac Sim (planned)
-├── ws_ros2/src/
-│   ├── Halcon1/            # Core logic (detection, tracking, guidance)
-│   ├── px4_bridges/        # PX4 communication packages
-│   └── simulation_bridges/ # Simulator-specific ROS2 bridges
-├── external/
-│   ├── PX4-Autopilot/      # PX4 flight stack (submodule)
-│   └── Micro-XRCE-DDS-Agent/ # PX4-ROS2 bridge (submodule)
-├── scripts/
-│   └── launch_unified.sh   # Main launcher script
-└── docs/                   # Detailed documentation
+├── src/
+│   ├── lib/                      # Shared libraries
+│   │   ├── algorithms/           # Kalman filter, ProNav
+│   │   ├── transforms/           # Coordinate transformations
+│   │   └── common_types/         # Shared data structures
+│   └── ros2/
+│       ├── modules/              # Core Halcon1 modules
+│       │   ├── detection/        # YOLO detection
+│       │   ├── tracking/         # Coordinate transforms
+│       │   ├── guidance/         # Kalman + ProNav
+│       │   ├── msgs/             # Custom message definitions
+│       │   ├── bringup/          # Launch files
+│       │   └── debug/            # Visualization tools
+│       ├── external/             # PX4 packages
+│       │   └── px4_msgs/         # PX4 message definitions
+│       └── simulation/           # Simulator-specific code
+│           ├── common/           # SimulationEngine interface
+│           ├── gazebo/           # Gazebo implementation
+│           └── airsim/           # AirSim implementation
+├── external/                     # Git submodules
+│   ├── PX4-Autopilot/            # PX4 flight stack
+│   └── Micro-XRCE-DDS-Agent/     # PX4-ROS2 bridge
+├── scripts/                      # Launch and utility scripts
+├── docs/                         # Comprehensive documentation
+└── README.md                     # This file
 ```
 
-## Simulation Comparison
+## Documentation
 
-| Feature | Gazebo | AirSim | Isaac Sim* |
-|---------|--------|--------|------------|
-| **Setup Time** | 5 min | 10 min | 15 min |
-| **Disk Space** | 500MB | 2-8GB | 10GB |
-| **Graphics** | Good | Photo-realistic | Ray-traced |
-| **Performance** | Fast ⚡ | Moderate | Very Fast (GPU) |
-| **Best For** | Development, CI/CD | CV research, demos | ML training |
+**Getting Started:**
+- [Installation](docs/INSTALLATION.md) - Setup instructions and troubleshooting
+- [Scripts](docs/SCRIPTS.md) - Launch script options and usage
 
-*Isaac Sim support is planned (not yet implemented)
+**Understanding the System:**
+- [Architecture](docs/ARCHITECTURE.md) - System design and data flow
+- [Algorithms](docs/ALGORITHMS.md) - Detection, tracking, and guidance details
+- [Simulation](docs/SIMULATION.md) - How to add simulators or integrate real hardware
 
-## Halcon1 Pipeline
+**Development:**
+- [Development Guide](docs/DEVELOPMENT.md) - Building, testing, contributing
 
-The system operates in three stages:
+## Simulator Comparison
 
-### 1. Detection (`detection`)
-- **Input**: `/camera/image` (RGB camera feed)
-- **Algorithm**: YOLOv8 drone detection
-- **Output**: `/enemy/detection` (2D bounding box, pixel coordinates)
+| Feature | Gazebo | AirSim |
+|---------|--------|--------|
+| **Setup** | 5 min | 15 min |
+| **Graphics** | Good | Photo-realistic |
+| **Best For** | Development | CV research |
 
-### 2. Tracking (`tracking`)
-- **Input**: `/enemy/detection` + `/camera/camera_info` + `/fmu/out/vehicle_odometry`
-- **Algorithm**: Pinhole camera model for depth estimation
-- **Output**: `/enemy/tracked` (3D position + velocity in world frame)
-
-### 3. Guidance (`guidance`)
-- **Input**: `/enemy/tracked` + `/fmu/out/vehicle_odometry`
-- **Algorithm**: Kalman Filter (prediction) + Proportional Navigation (guidance)
-- **Output**: `/fmu/in/trajectory_setpoint` (acceleration commands to PX4)
-
-## Development
-
-### Building Individual Packages
-
-```bash
-cd ws_ros2
-source /opt/ros/humble/setup.bash
-
-# Build specific package
-colcon build --packages-select detection
-
-# Build all Halcon1 packages
-colcon build --packages-up-to bringup
-```
-
-### Testing Changes
-
-```bash
-# Rebuild package
-cd ws_ros2
-colcon build --packages-select tracking
-source install/setup.bash
-
-# Test with fake data
-ros2 topic pub /enemy/detection msgs/Detection \
-  '{header: {frame_id: "camera"}, x: 320.0, y: 240.0, confidence: 0.95}'
-
-# Check output
-ros2 topic echo /enemy/tracked --once
-```
-
-### Adding a New Simulator
-
-Want to add Isaac Sim, Webots, or another simulator?
-
-1. Implement `SimulationEngine` interface in `simulation/<your_sim>/<your_sim>_engine.py`
-2. Register with factory: `SimulationEngineFactory.register_engine("yoursim", YourSimEngine)`
-3. Test: `./scripts/launch.sh --sim yoursim`
-
-See [simulation/common/README.md](simulation/common/README.md) for detailed instructions.
-
-## Troubleshooting
-
-### Gazebo Issues
-
-```bash
-# Camera bridge not working
-cd ws_ros2
-colcon build --packages-select ros_gz_bridge --cmake-clean-cache
-
-# PX4 won't connect
-cd external/PX4-Autopilot
-make clean && make px4_sitl gz_x500_mono_cam
-```
-
-### AirSim Issues
-
-```bash
-# Can't connect to AirSim
-# 1. Ensure AirSim is running (you see the drone in Unreal)
-# 2. Check settings.json exists:
-ls ~/Documents/AirSim/settings.json
-
-# 3. Verify Python packages:
-pip install airsim msgpack-rpc-python
-```
-
-### Available Parameters
-
-The unified launcher supports the following options:
-
-```bash
-# Simulator selection (default: gazebo)
---sim gazebo          # Fast, lightweight simulator
---sim airsim          # Photo-realistic Unreal Engine simulator
-
-# Mode selection (default: single)
---mode single         # Single ally drone only
---mode multi          # Ally + enemy drones (launches enemy offboard control)
-
-# Debug mode (default: off)
---debug               # Launches RViz2 and enables debugging node publishing
-
-# World/environment (default: default)
---world <name>        # Load specific world (simulator-specific)
-```
-
-**Examples:**
-```bash
-# Simple launch
-./scripts/launch.sh --sim gazebo
-
-# Multi-drone with debug
-./scripts/launch.sh --sim gazebo --mode multi --debug
-
-# Custom world
-./scripts/launch.sh --sim gazebo --world custom_world
-```
-
-## Contributing
-
-See [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) for:
-- Code structure guidelines
-- How to add new modules
-- Testing procedures
-- Pull request process
+See [Simulation Guide](docs/SIMULATION.md) for adding Isaac Sim or real hardware.
 
 ## License
 
-Apache 2.0 - See [LICENSE](LICENSE) file
+Apache 2.0 - See [LICENSE](LICENSE)
 
-## Citation
+## Built With
 
-If you use Halcon1 in your research, please cite:
-
-```bibtex
-@misc{halcon1,
-  title={Halcon1: Autonomous Drone Interception System},
-  author={Halcon Team},
-  year={2025},
-  url={https://github.com/eloyf26/halcon1-system}
-}
-```
-
-## Acknowledgments
-
-Built with:
-- [PX4 Autopilot](https://px4.io/) - Flight controller software
-- [Gazebo](https://gazebosim.org/) - Robot simulator
-- [Microsoft AirSim](https://microsoft.github.io/AirSim/) - Autonomous vehicle simulator
-- [ROS2](https://ros.org/) - Robot Operating System
-
----
-
-**Need Help?** Check [docs/](docs/) or open an [issue](https://github.com/eloyf26/halcon1-system/issues)
-
-**Want to Contribute?** See [DEVELOPMENT.md](docs/DEVELOPMENT.md)
+- [PX4 Autopilot](https://px4.io/) - Flight controller
+- [Gazebo Harmonic](https://gazebosim.org/) - Simulator
+- [Microsoft AirSim](https://microsoft.github.io/AirSim/) - Photo-realistic simulator
+- [ROS2 Humble](https://ros.org/) - Middleware
+- [Ultralytics YOLOv11](https://ultralytics.com/) - Object detection

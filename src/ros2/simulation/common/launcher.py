@@ -224,7 +224,7 @@ Available simulators:
         parser.add_argument(
             "--debug",
             action="store_true",
-            help="Enable debug mode (launches RViz2, enables debugging node publishing)"
+            help="Enable debug visualizers (ally_visualizer, enemy_visualizer for debug markers)"
         )
 
         return parser.parse_args()
@@ -453,27 +453,26 @@ Available simulators:
             print("[Launcher] ERROR: Failed to start Halcon1 pipeline")
             return False
 
-        # Launch RViz2 if debug mode
-        if debug:
-            print("[Launcher] Launching RViz2 (debug mode)...")
-            rviz_cmd = [
-                "bash", "-c",
-                f"source /opt/ros/humble/setup.bash && "
-                f"source {ws_setup} && "
-                f"rviz2"
-            ]
+        # Launch RViz2 (always - standard visualization tool)
+        print("[Launcher] Launching RViz2...")
+        rviz_cmd = [
+            "bash", "-c",
+            f"source /opt/ros/humble/setup.bash && "
+            f"source {ws_setup} && "
+            f"rviz2"
+        ]
 
-            rviz_proc = self._launch_in_terminal(
-                title="RViz2 (Debug)",
-                cmd=rviz_cmd,
-                color="yellow"
-            )
+        rviz_proc = self._launch_in_terminal(
+            title="RViz2",
+            cmd=rviz_cmd,
+            color="yellow"
+        )
 
-            if rviz_proc:
-                self.processes.append(("rviz2", rviz_proc))
-                print("[Launcher] ✓ RViz2 started")
-            else:
-                print("[Launcher] WARNING: Failed to start RViz2")
+        if rviz_proc:
+            self.processes.append(("rviz2", rviz_proc))
+            print("[Launcher] ✓ RViz2 started")
+        else:
+            print("[Launcher] WARNING: Failed to start RViz2")
 
         return True
 
@@ -563,10 +562,10 @@ Available simulators:
                 print("[Launcher] ERROR: Failed to launch Halcon1 pipeline")
                 return 1
 
-            # Step 7: Launch debug translator (for RViz visualization)
-            if args.debug and mode == SimulationMode.MULTI_DRONE:
+            # Step 7: Launch debug visualizers (ally/enemy visualization markers)
+            if args.debug:
                 if not self.engine.launch_debug_translator(drones):
-                    print("[Launcher] WARNING: Failed to launch debug translator (non-critical)")
+                    print("[Launcher] WARNING: Failed to launch debug visualizers (non-critical)")
 
             # Success!
             print(f"\n[Launcher] {'='*60}")

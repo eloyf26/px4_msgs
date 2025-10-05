@@ -97,10 +97,28 @@ check_status "Gazebo Harmonic installed" \
     "Installed automatically by PX4 toolchain setup" \
     true
 
-check_status "ros_gz packages built" \
-    "test -d $REPO_ROOT/install/ros_gz" \
-    "ros_gz not built" \
-    "Run: colcon build --packages-select ros_gz" \
+check_status "ros_gz_interfaces built" \
+    "test -d $REPO_ROOT/install/ros_gz_interfaces" \
+    "ros_gz packages not built" \
+    "Run: ./setup.sh --gazebo" \
+    true
+
+check_status "ros_gz_bridge built" \
+    "test -d $REPO_ROOT/install/ros_gz_bridge" \
+    "ros_gz_bridge not built" \
+    "Run: ./setup.sh --gazebo" \
+    true
+
+check_status "ros_gz_sim built" \
+    "test -d $REPO_ROOT/install/ros_gz_sim" \
+    "ros_gz_sim not built" \
+    "Run: ./setup.sh --gazebo" \
+    true
+
+check_status "ros_gz_image built" \
+    "test -d $REPO_ROOT/install/ros_gz_image" \
+    "ros_gz_image not built" \
+    "Run: ./setup.sh --gazebo" \
     true
 
 echo ""

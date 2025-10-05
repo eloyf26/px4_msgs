@@ -92,7 +92,7 @@ Single entry point for all simulators:
 # Launch AirSim (photo-realistic)
 ./scripts/launch.sh --sim airsim
 
-# Launch with debug mode (RViz2 + debugging nodes)
+# Launch with debug visualizers (ally/enemy debug markers)
 ./scripts/launch.sh --sim gazebo --debug
 
 # Multi-drone mode (launches enemy offboard control automatically)
@@ -105,7 +105,7 @@ Single entry point for all simulators:
 **Available Parameters:**
 - `--sim <simulator>`: Simulator to use (gazebo, airsim) - default: gazebo
 - `--mode <mode>`: Simulation mode (single, multi, hardware) - default: single
-- `--debug`: Enable debug mode (RViz2, debugging node publishing)
+- `--debug`: Enable debug visualizers (ally_visualizer, enemy_visualizer for debug markers). Note: RViz2 always launches
 - `--world <name>`: World/environment to load (simulator-specific) - default: default
 
 The launcher (`simulation/common/launcher.py`):
