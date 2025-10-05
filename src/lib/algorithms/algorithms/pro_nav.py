@@ -32,7 +32,9 @@ class ProportionalNavigation:
         relative_velocity = enemy_velocity - friendly_velocity
 
         distance = np.linalg.norm(relative_position)
+
         if distance < 1e-6:
+            print(f"[ProNav] Already at target, zero acceleration")
             return np.zeros(3) # Already at target
 
         # Line of Sight (LOS) unit vector
@@ -67,12 +69,19 @@ class ProportionalNavigation:
         # Step 4: Calculate weights based on distance and velocity
         current_speed = np.linalg.norm(friendly_velocity)
         speed_ratio = current_speed / self.params.max_velocity  # 0 when slow, 1 when at max speed
-        # 0 at distance < threshold, 1 at distance threshold + full_directional
-        distance_ratio = max(0, min((distance - self.params.directional_to_los_change_threshold)
-                                    / self.params.full_direction_acceleration, 1))
+
+        # Distance-based weight: 1 when far (>threshold), 0 when close (<threshold)
+        if distance > self.params.directional_to_los_change_threshold:
+            distance_weight = 1.0
+        else:
+            distance_weight = 0.0
+
+        # Speed-based weight: 1 when slow, 0 when fast
+        speed_weight = 1.0 - speed_ratio
 
         # Weight for directional acceleration: higher when drone is slow OR far from target
-        weight_directional = (1.0 - speed_ratio) * distance_ratio
+        # Use max to implement OR logic (either condition gives high weight)
+        weight_directional = max(speed_weight, distance_weight)
 
         # Weight for ProNav: higher when drone is fast AND close to target
         weight_pronav = 1.0 - weight_directional
@@ -87,5 +96,3 @@ class ProportionalNavigation:
             combined_acceleration = combined_acceleration * (self.params.max_acceleration / acceleration_norm)
 
         return combined_acceleration
-
-

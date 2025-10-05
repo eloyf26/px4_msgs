@@ -71,8 +71,8 @@ class StateManager:
 
     def _predict_friendly_state(self, current_time_millis: int):
         if self.friendly_position is None or self.friendly_velocity is None or self.friendly_last_update is None:
-            return None
+            return None, None
 
-        dt = (current_time_millis - self.friendly_last_update) / 1000.0
+        dt = (current_time_millis - self.friendly_last_update) / 1000.0  # Convert milliseconds to seconds
         predicted_position = self.friendly_position + self.friendly_velocity * dt
         return predicted_position, self.friendly_velocity

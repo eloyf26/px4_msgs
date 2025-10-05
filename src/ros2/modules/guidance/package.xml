@@ -10,7 +10,10 @@
   <depend>msgs</depend>
   <depend>common_types</depend>
   <depend>algorithms</depend>
+  <depend>transforms</depend>
   <depend>std_msgs</depend>
+  <depend>px4_msgs</depend>
+  <depend>geometry_msgs</depend>
 
   <test_depend>ament_copyright</test_depend>
   <test_depend>ament_flake8</test_depend>

@@ -73,16 +73,25 @@ class KalmanFilter:
         """
         Predict step of Kalman filter.
         Uses the current state and the constant velocity model to predict the state at time current_time_millis.
-        Retuns a tuple with the estimated position and estimated velocity.
+        Returns a tuple with the estimated position and estimated velocity.
         """
 
-        dt = (current_time_millis - self.latest_update_millis) / 1000.0 if self.latest_update_millis is not None else 0.1
-        self.latest_update_millis = current_time_millis
+        dt = (current_time_millis - self.latest_update_millis) / 1000.0 if self.latest_update_millis is not None else 0.1  # Convert milliseconds to seconds
+        dt = min(dt, 10.0) # Clamp dt value to avoid predictions too far in the future
+
+        print(f"[KalmanFilter.predict]")
+        print(f"  dt: {dt:.6f}s")
+        print(f"  Current state pos: [{self.state[0]:.2f}, {self.state[1]:.2f}, {self.state[2]:.2f}]")
+        print(f"  Current state vel: [{self.state[3]:.2f}, {self.state[4]:.2f}, {self.state[5]:.2f}]")
+        print(f"  Current state acc: [{self.state[6]:.2f}, {self.state[7]:.2f}, {self.state[8]:.2f}]")
 
         F = self._get_state_transition_matrix(dt)
-        self.state = F @ self.state
+        predicted_state = F @ self.state
 
-        return self.state[:3], self.state[3:6]
+        print(f"  Predicted pos: [{predicted_state[0]:.2f}, {predicted_state[1]:.2f}, {predicted_state[2]:.2f}]")
+        print(f"  Predicted vel: [{predicted_state[3]:.2f}, {predicted_state[4]:.2f}, {predicted_state[5]:.2f}]")
+
+        return predicted_state[:3], predicted_state[3:6]
 
     def update(self, measurement: np.ndarray, current_time_millis: int):
         """
@@ -90,7 +99,7 @@ class KalmanFilter:
         Given a new measurement (position only), update the state and covariance.
         """
 
-        dt = (current_time_millis - self.latest_update_millis) / 1000.0 if self.latest_update_millis is not None else 0.1
+        dt = (current_time_millis - self.latest_update_millis) / 1000.0 if self.latest_update_millis is not None else 0.1  # Convert milliseconds to seconds
         self.latest_update_millis = current_time_millis
 
         F = self._get_state_transition_matrix(dt)
@@ -105,6 +114,6 @@ class KalmanFilter:
         
         # Update state
         self.state = self.state + K @ innovation
-        
+
         # Update covariance
         self.P = (np.eye(9) - K @ self.H) @ self.P
