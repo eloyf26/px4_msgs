@@ -31,7 +31,15 @@ class AirSimEngine(SimulationEngineBase):
     ENVIRONMENT_MAP = {
         "blocks": ("LinuxBlocks1.8.1", "Blocks.sh"),
         "landscape": ("LandscapeMountains", "LandscapeMountains.sh"),
-        "city": ("CityEnviron", "CityEnviron.sh"),
+        "airsimnh": ("AirSimNH", "AirSimNH.sh"),  # Small urban neighborhood
+    }
+
+    # Download URLs for AirSim environments
+    # Note: v1.8.1 has Blocks, v1.7.0-linux has LandscapeMountains and AirSimNH
+    ENVIRONMENT_DOWNLOAD_URLS = {
+        "blocks": "https://github.com/microsoft/AirSim/releases/download/v1.8.1/Blocks.zip",
+        "landscape": "https://github.com/microsoft/AirSim/releases/download/v1.7.0-linux/LandscapeMountains.zip",
+        "airsimnh": "https://github.com/microsoft/AirSim/releases/download/v1.7.0-linux/AirSimNH.zip",
     }
 
     def __init__(self, config):
@@ -146,6 +154,118 @@ class AirSimEngine(SimulationEngineBase):
 
         return False
 
+    def _download_and_install_environment(self, env_name: str) -> bool:
+        """
+        Download and install an AirSim environment.
+
+        Args:
+            env_name: Environment name (blocks, landscape, city)
+
+        Returns:
+            True if successful, False otherwise
+        """
+        if env_name not in self.ENVIRONMENT_DOWNLOAD_URLS:
+            print(f"[{self.get_name()}] ERROR: Unknown environment '{env_name}'")
+            return False
+
+        url = self.ENVIRONMENT_DOWNLOAD_URLS[env_name]
+        dir_name, script = self.ENVIRONMENT_MAP[env_name]
+        env_dir = Path.home() / "AirSimEnvironments"
+        target_dir = env_dir / dir_name
+
+        # Environment metadata
+        env_sizes = {
+            "blocks": "~400MB",
+            "landscape": "~5GB",
+            "airsimnh": "~1.5GB"
+        }
+
+        print(f"\n[{self.get_name()}] ═══════════════════════════════════════")
+        print(f"[{self.get_name()}] Downloading {env_name.upper()} environment")
+        print(f"[{self.get_name()}] Size: {env_sizes.get(env_name, 'Unknown')}")
+        print(f"[{self.get_name()}] URL: {url}")
+        print(f"[{self.get_name()}] ═══════════════════════════════════════\n")
+
+        zip_file = None  # Initialize for cleanup in exception handler
+
+        try:
+            # Create directory
+            env_dir.mkdir(parents=True, exist_ok=True)
+
+            # Check if already exists
+            if target_dir.exists():
+                print(f"[{self.get_name()}] WARNING: {dir_name} already exists")
+                response = input(f"[{self.get_name()}] Re-download? (y/N): ").strip().lower()
+                if response != 'y':
+                    print(f"[{self.get_name()}] Using existing installation")
+                    return True
+
+                # Remove existing
+                import shutil
+                shutil.rmtree(target_dir)
+                print(f"[{self.get_name()}] Removed existing installation")
+
+            # Download
+            zip_file = env_dir / f"{env_name}.zip"
+            print(f"[{self.get_name()}] Downloading... (this may take a while)")
+
+            result = subprocess.run(
+                ["wget", "--progress=bar:force", "-O", str(zip_file), url],
+                cwd=str(env_dir),
+                check=True
+            )
+
+            if not zip_file.exists():
+                print(f"[{self.get_name()}] ERROR: Download failed")
+                return False
+
+            print(f"[{self.get_name()}] ✓ Download complete")
+
+            # Extract
+            print(f"[{self.get_name()}] Extracting environment...")
+            result = subprocess.run(
+                ["unzip", "-q", str(zip_file)],
+                cwd=str(env_dir),
+                check=True
+            )
+
+            # Remove zip file
+            zip_file.unlink()
+            print(f"[{self.get_name()}] ✓ Extraction complete")
+
+            # Make script executable
+            script_path = target_dir / "LinuxNoEditor" / script
+            if script_path.exists():
+                os.chmod(script_path, 0o755)
+                print(f"[{self.get_name()}] ✓ Made script executable")
+            else:
+                print(f"[{self.get_name()}] WARNING: Script not found at {script_path}")
+                return False
+
+            # Verify installation
+            if script_path.exists() and os.access(script_path, os.X_OK):
+                print(f"\n[{self.get_name()}] ╔════════════════════════════════════════╗")
+                print(f"[{self.get_name()}] ║  Installation Successful!              ║")
+                print(f"[{self.get_name()}] ╚════════════════════════════════════════╝")
+                print(f"[{self.get_name()}] Environment: {target_dir}")
+                print(f"[{self.get_name()}] Launch script: {script_path}\n")
+                return True
+            else:
+                print(f"[{self.get_name()}] ERROR: Installation verification failed")
+                return False
+
+        except subprocess.CalledProcessError as e:
+            print(f"[{self.get_name()}] ERROR: Command failed: {e}")
+            # Clean up partial download
+            if zip_file and zip_file.exists():
+                zip_file.unlink()
+            return False
+        except Exception as e:
+            print(f"[{self.get_name()}] ERROR: {e}")
+            import traceback
+            traceback.print_exc()
+            return False
+
     def get_camera_topic(self, drone_name: str = "Ally") -> str:
         """AirSim camera bridge publishes to /camera/image"""
         return "/camera/image"
@@ -195,8 +315,20 @@ class AirSimEngine(SimulationEngineBase):
                     if is_valid:
                         return selected
                     else:
+                        # Environment not installed - offer to download
                         print(f"[{self.get_name()}] {msg}")
-                        print(f"[{self.get_name()}] Please select an installed environment")
+                        response = input(f"[{self.get_name()}] Download and install now? (y/n): ").strip().lower()
+
+                        if response == 'y':
+                            # Attempt download and installation
+                            if self._download_and_install_environment(selected):
+                                print(f"[{self.get_name()}] ✓ Environment ready!")
+                                return selected
+                            else:
+                                print(f"[{self.get_name()}] ERROR: Installation failed")
+                                print(f"[{self.get_name()}] Please select a different environment or try again later")
+                        else:
+                            print(f"[{self.get_name()}] Please select an installed environment")
                 else:
                     print(f"[{self.get_name()}] Invalid choice. Enter a number between 1 and {len(available)}")
             except ValueError:
