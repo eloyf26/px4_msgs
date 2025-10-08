@@ -2,7 +2,7 @@
 # Generated from analysis of all Python modules in the project
 
 # Deep Learning & Computer Vision
-ultralytics==8.3.204
+ultralytics==8.3.205
 torch==2.8.0
 torchvision==0.23.0
 opencv-python==4.9.0.80

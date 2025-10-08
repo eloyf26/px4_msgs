@@ -58,6 +58,35 @@ done
 
 echo "=== Halcon1 System Setup ==="
 
+# 1. Clean stale build artifacts and fix paths
+echo "→ Checking for stale build artifacts..."
+
+# Check PX4 build cache
+if [ -d "external/PX4-Autopilot/build" ]; then
+    CACHED_PATH=$(grep -oP 'CMAKE_HOME_DIRECTORY:INTERNAL=\K.*' external/PX4-Autopilot/build/px4_sitl_default/CMakeCache.txt 2>/dev/null || echo "")
+    if [ -n "$CACHED_PATH" ] && [ "$CACHED_PATH" != "$SCRIPT_DIR/external/PX4-Autopilot" ]; then
+        echo "⚠️  Detected stale PX4 build cache (from different directory)"
+        echo "→ Cleaning PX4 build artifacts..."
+        rm -rf external/PX4-Autopilot/build
+        echo "✓ PX4 build artifacts cleaned"
+    fi
+fi
+
+# Check Micro-XRCE-DDS-Agent build cache
+if [ -d "external/Micro-XRCE-DDS-Agent/build" ]; then
+    CACHED_PATH=$(grep -oP 'CMAKE_HOME_DIRECTORY:INTERNAL=\K.*' external/Micro-XRCE-DDS-Agent/build/CMakeCache.txt 2>/dev/null || echo "")
+    if [ -n "$CACHED_PATH" ] && [ "$CACHED_PATH" != "$SCRIPT_DIR/external/Micro-XRCE-DDS-Agent" ]; then
+        echo "⚠️  Detected stale Micro-XRCE-DDS-Agent build cache (from different directory)"
+        echo "→ Cleaning Micro-XRCE-DDS-Agent build artifacts..."
+        rm -rf external/Micro-XRCE-DDS-Agent/build
+        echo "✓ Micro-XRCE-DDS-Agent build artifacts cleaned"
+    fi
+fi
+
+# Sync git submodule paths if needed
+echo "→ Syncing git submodule paths..."
+git submodule sync --recursive 2>/dev/null || true
+
 # Function to verify Python dependencies
 verify_python_dependencies() {
     local mode=$1  # "gazebo", "airsim", or "full"
@@ -339,14 +368,32 @@ else
     verify_python_dependencies "gazebo"
 fi
 
-# Clean up old build artifacts
-echo "→ Cleaning up old build artifacts..."
-if [ -d "build" ] || [ -d "install" ] || [ -d "log" ]; then
-    echo "  ↷ Removing old build/install/log directories..."
-    rm -rf build/ install/ log/
-    echo "  ✓ Old build artifacts removed"
+# Clean up stale build artifacts if they contain paths from different directory
+echo "→ Checking for stale ROS2 build artifacts..."
+NEEDS_CLEAN=false
+if [ -d "build" ]; then
+    # Check if any CMakeCache.txt files contain references to old directory
+    for cache_file in $(find build -name "CMakeCache.txt" 2>/dev/null); do
+        CACHED_PATH=$(grep -oP 'CMAKE_HOME_DIRECTORY:INTERNAL=\K.*' "$cache_file" 2>/dev/null || echo "")
+        if [ -n "$CACHED_PATH" ] && [[ "$CACHED_PATH" != "$SCRIPT_DIR"* ]]; then
+            NEEDS_CLEAN=true
+            break
+        fi
+    done
 fi
-echo "  ✓ Cleanup complete"
+
+if [ "$NEEDS_CLEAN" = true ]; then
+    echo "⚠️  Detected stale ROS2 build artifacts (from different directory)"
+    echo "→ Cleaning ROS2 build/install/log directories..."
+    rm -rf build install log
+    echo "✓ ROS2 build artifacts cleaned"
+else
+    echo "✓ No stale build artifacts detected"
+fi
+
+# Unset stale environment variables
+unset COLCON_PREFIX_PATH 2>/dev/null || true
+export AMENT_PREFIX_PATH=/opt/ros/humble
 
 # 10. Build in correct order
 
