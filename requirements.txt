@@ -24,6 +24,7 @@ pyyaml>=6.0  # Alias for compatibility
 
 # Simulation
 airsim==1.8.1
+pynput==1.8.1
 
 # Development & Testing
 pytest==6.2.5

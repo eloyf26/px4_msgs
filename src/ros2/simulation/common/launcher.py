@@ -227,6 +227,30 @@ Available simulators:
             help="Enable debug visualizers (ally_visualizer, enemy_visualizer for debug markers)"
         )
 
+        parser.add_argument(
+            "--separate-terminals",
+            action="store_true",
+            help="Launch detection, tracking, and guidance nodes in separate terminals"
+        )
+
+        parser.add_argument(
+            "--skip-detection",
+            action="store_true",
+            help="Skip launching the detection node"
+        )
+
+        parser.add_argument(
+            "--skip-tracking",
+            action="store_true",
+            help="Skip launching the tracking node"
+        )
+
+        parser.add_argument(
+            "--skip-guidance",
+            action="store_true",
+            help="Skip launching the guidance node"
+        )
+
         return parser.parse_args()
 
     def create_drone_configs(self, mode: SimulationMode) -> List[DroneConfig]:
@@ -424,34 +448,140 @@ Available simulators:
             print("[Launcher] ERROR: Failed to start enemy offboard control")
             return False
 
-    def launch_halcon1_pipeline(self, debug: bool) -> bool:
-        """Launch Halcon1 detection/tracking/guidance pipeline in terminal"""
+    def launch_halcon1_pipeline(self, debug: bool, separate_terminals: bool = False,
+                                skip_detection: bool = False, skip_tracking: bool = False,
+                                skip_guidance: bool = False) -> bool:
+        """Launch Halcon1 detection/tracking/guidance pipeline in terminal(s)"""
         print("[Launcher] Starting Halcon1 pipeline...")
 
         ws_setup = self.ws_ros2 / "install" / "setup.bash"
 
-        # Pass debug parameter to launch file
-        debug_arg = "debug:=true" if debug else "debug:=false"
+        if separate_terminals:
+            # Launch each node in a separate terminal
+            print("[Launcher] Launching nodes in separate terminals...")
 
-        cmd = [
-            "bash", "-c",
-            f"source /opt/ros/humble/setup.bash && "
-            f"source {ws_setup} && "
-            f"ros2 launch bringup pipeline.launch.py {debug_arg}"
-        ]
+            # Common ROS2 parameters
+            debug_param = "true" if debug else "false"
 
-        proc = self._launch_in_terminal(
-            title="Halcon1 Pipeline",
-            cmd=cmd,
-            color="cyan"
-        )
+            # Detection node (cyan)
+            if not skip_detection:
+                detection_cmd = [
+                    "bash", "-c",
+                    f"source /opt/ros/humble/setup.bash && "
+                    f"source {ws_setup} && "
+                    f"ros2 run detection detection_node --ros-args "
+                    f"-p use_sim_time:=false -p debug:={debug_param}"
+                ]
 
-        if proc:
-            self.processes.append(("halcon1_pipeline", proc))
-            print("[Launcher] ✓ Halcon1 pipeline started")
+                detection_proc = self._launch_in_terminal(
+                    title="Halcon1 Detection",
+                    cmd=detection_cmd,
+                    color="cyan"
+                )
+
+                if detection_proc:
+                    self.processes.append(("halcon1_detection", detection_proc))
+                    print("[Launcher] ✓ Detection node started")
+                else:
+                    print("[Launcher] ERROR: Failed to start detection node")
+                    return False
+
+                time.sleep(1)  # Brief delay between node launches
+            else:
+                print("[Launcher] ⊗ Skipping detection node")
+
+            # Tracking node (green)
+            if not skip_tracking:
+                tracking_cmd = [
+                    "bash", "-c",
+                    f"source /opt/ros/humble/setup.bash && "
+                    f"source {ws_setup} && "
+                    f"ros2 run tracking tracking_node --ros-args "
+                    f"-p use_sim_time:=false -p debug:={debug_param}"
+                ]
+
+                tracking_proc = self._launch_in_terminal(
+                    title="Halcon1 Tracking",
+                    cmd=tracking_cmd,
+                    color="green"
+                )
+
+                if tracking_proc:
+                    self.processes.append(("halcon1_tracking", tracking_proc))
+                    print("[Launcher] ✓ Tracking node started")
+                else:
+                    print("[Launcher] ERROR: Failed to start tracking node")
+                    return False
+
+                time.sleep(1)  # Brief delay between node launches
+            else:
+                print("[Launcher] ⊗ Skipping tracking node")
+
+            # Guidance node (blue)
+            if not skip_guidance:
+                guidance_cmd = [
+                    "bash", "-c",
+                    f"source /opt/ros/humble/setup.bash && "
+                    f"source {ws_setup} && "
+                    f"ros2 run guidance guidance_node --ros-args "
+                    f"-p use_sim_time:=false -p debug:={debug_param}"
+                ]
+
+                guidance_proc = self._launch_in_terminal(
+                    title="Halcon1 Guidance",
+                    cmd=guidance_cmd,
+                    color="blue"
+                )
+
+                if guidance_proc:
+                    self.processes.append(("halcon1_guidance", guidance_proc))
+                    print("[Launcher] ✓ Guidance node started")
+                else:
+                    print("[Launcher] ERROR: Failed to start guidance node")
+                    return False
+            else:
+                print("[Launcher] ⊗ Skipping guidance node")
+
         else:
-            print("[Launcher] ERROR: Failed to start Halcon1 pipeline")
-            return False
+            # Launch all nodes together using launch file (original behavior)
+            print("[Launcher] Launching pipeline with launch file...")
+
+            # Build launch arguments
+            launch_args = []
+            launch_args.append("debug:=true" if debug else "debug:=false")
+            launch_args.append("skip_detection:=true" if skip_detection else "skip_detection:=false")
+            launch_args.append("skip_tracking:=true" if skip_tracking else "skip_tracking:=false")
+            launch_args.append("skip_guidance:=true" if skip_guidance else "skip_guidance:=false")
+
+            # Print skip warnings
+            if skip_detection:
+                print("[Launcher] ⊗ Skipping detection node")
+            if skip_tracking:
+                print("[Launcher] ⊗ Skipping tracking node")
+            if skip_guidance:
+                print("[Launcher] ⊗ Skipping guidance node")
+
+            launch_args_str = " ".join(launch_args)
+
+            cmd = [
+                "bash", "-c",
+                f"source /opt/ros/humble/setup.bash && "
+                f"source {ws_setup} && "
+                f"ros2 launch bringup pipeline.launch.py {launch_args_str}"
+            ]
+
+            proc = self._launch_in_terminal(
+                title="Halcon1 Pipeline",
+                cmd=cmd,
+                color="cyan"
+            )
+
+            if proc:
+                self.processes.append(("halcon1_pipeline", proc))
+                print("[Launcher] ✓ Halcon1 pipeline started")
+            else:
+                print("[Launcher] ERROR: Failed to start Halcon1 pipeline")
+                return False
 
         # Launch RViz2 (always - standard visualization tool)
         print("[Launcher] Launching RViz2...")
@@ -558,7 +688,13 @@ Available simulators:
                     return 1
 
             # Step 6: Launch Halcon1 pipeline
-            if not self.launch_halcon1_pipeline(args.debug):
+            if not self.launch_halcon1_pipeline(
+                args.debug,
+                args.separate_terminals,
+                args.skip_detection,
+                args.skip_tracking,
+                args.skip_guidance
+            ):
                 print("[Launcher] ERROR: Failed to launch Halcon1 pipeline")
                 return 1
 
