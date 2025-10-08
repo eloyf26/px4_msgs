@@ -7,7 +7,7 @@ package_name = 'detection'
 setup(
     name=package_name,
     version='0.0.0',
-    packages=[package_name],
+    packages=[package_name, f'{package_name}.extensions'],
     data_files=[
         ('share/ament_index/resource_index/packages',
             ['resource/' + package_name]),
@@ -36,6 +36,8 @@ setup(
             'models/*.pt',
             'models/*.pth',
             'config.yaml',
+            'extensions/*.py',
+            'extensions/README.md',
         ],
     },
     include_package_data=True,

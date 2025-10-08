@@ -5,6 +5,9 @@ import numpy as np
 import yaml
 from pathlib import Path
 
+# Import extensions to auto-register custom architectures (LMWP-YOLO, etc.)
+from . import extensions
+
 
 class DetectionAlgorithm:
     def __init__(self):
@@ -51,7 +54,7 @@ class DetectionAlgorithm:
 
         print(f"Configured to use model: {self.model_config['name']}")
 
-        # Load the YOLO model
+        # Load the YOLO model (extensions auto-registered, so just use YOLO directly)
         if self.model_path.exists():
             print(f"Loading model from: {self.model_path}")
             self.model = YOLO(str(self.model_path))

@@ -1,7 +1,7 @@
 # Halcon1 Detection Configuration
 
 # Selected model (options: yolo11n_base, yolo11n_drone, yolo11n_fast)
-selected_model: 'yolo11n_base'
+selected_model: 'long_range'
 
 # Model configurations
 models:
@@ -10,6 +10,11 @@ models:
     confidence_threshold: 0.5
     nms_threshold: 0.45
     target_classes: null  # null = all classes
+  long_range:
+    name: 'yolo11n-extended-200epochs.pt'
+    confidence_threshold: 0.5
+    nms_threshold: 0.45
+    target_classes: [0]  # List of class IDs (0 = drone)
 
 # Tracking consistency
 tracking:
