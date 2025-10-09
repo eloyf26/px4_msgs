@@ -5,6 +5,8 @@ import time
 import random
 import sys
 import select
+import termios
+import tty
 import rclpy
 from rclpy.node import Node
 from rclpy.qos import QoSProfile, ReliabilityPolicy, HistoryPolicy, DurabilityPolicy
@@ -26,7 +28,7 @@ class EnemyOffboardControl(Node):
         self.duration = self.get_parameter('duration').value
 
         # Validate pattern
-        valid_patterns = ['circle', 'figure8', 'random']
+        valid_patterns = ['circle', 'figure8', 'random', 'keyboard']
         if self.pattern not in valid_patterns:
             self.get_logger().error(f"Invalid pattern: {self.pattern}. Using 'circle'.")
             self.pattern = 'circle'
@@ -79,6 +81,17 @@ class EnemyOffboardControl(Node):
         self.random_bounds = 100.0  # meters
         self.random_target = None
         self.random_target_time = 0
+
+        # Keyboard control parameters
+        self.keyboard_position = [0.0, -2.0, self.current_altitude]  # Start at origin with y offset
+        self.keyboard_speed = 1.0  # m/s per update (0.1s timer = 0.1m per keypress)
+        self.keyboard_last_key_time = 0
+        self.old_settings = None
+
+        # Set stdin to non-blocking mode for keyboard input
+        if sys.stdin.isatty():
+            self.old_settings = termios.tcgetattr(sys.stdin)
+            tty.setcbreak(sys.stdin.fileno())
 
         # Create a timer to publish at 10Hz (required for offboard mode)
         self.timer = self.create_timer(0.1, self.timer_callback)
@@ -169,6 +182,41 @@ class EnemyOffboardControl(Node):
 
         return self.random_target
 
+    def get_keyboard_position(self, t: float):
+        """Get position based on keyboard input (WASD+RF)."""
+        # Check for keyboard input (non-blocking)
+        if select.select([sys.stdin], [], [], 0.0)[0]:
+            key = sys.stdin.read(1).lower()
+
+            # Update position based on key press
+            # W/S: Y axis (forward/backward in NED frame)
+            if key == 'w':
+                self.keyboard_position[1] += self.keyboard_speed
+                self.get_logger().info(f'Forward: Y={self.keyboard_position[1]:.1f}')
+            elif key == 's':
+                self.keyboard_position[1] -= self.keyboard_speed
+                self.get_logger().info(f'Backward: Y={self.keyboard_position[1]:.1f}')
+            # A/D: X axis (left/right in NED frame)
+            elif key == 'a':
+                self.keyboard_position[0] -= self.keyboard_speed
+                self.get_logger().info(f'Left: X={self.keyboard_position[0]:.1f}')
+            elif key == 'd':
+                self.keyboard_position[0] += self.keyboard_speed
+                self.get_logger().info(f'Right: X={self.keyboard_position[0]:.1f}')
+            # R/F: Z axis (up/down in NED frame - negative is up)
+            elif key == 'r':
+                self.keyboard_position[2] -= self.keyboard_speed
+                self.get_logger().info(f'Up: Z={self.keyboard_position[2]:.1f}')
+            elif key == 'f':
+                self.keyboard_position[2] += self.keyboard_speed
+                self.get_logger().info(f'Down: Z={self.keyboard_position[2]:.1f}')
+            elif key == 'q':
+                self.get_logger().info('Q pressed - landing...')
+                self.land()
+                self.timer.cancel()
+
+        return tuple(self.keyboard_position)
+
     def timer_callback(self) -> None:
         """Callback function for the timer."""
         # Always publish offboard control mode (required by PX4)
@@ -198,6 +246,8 @@ class EnemyOffboardControl(Node):
             x, y, z = self.get_figure8_position(elapsed)
         elif self.pattern == 'random':
             x, y, z = self.get_random_position(elapsed)
+        elif self.pattern == 'keyboard':
+            x, y, z = self.get_keyboard_position(elapsed)
         else:
             # Default: hover at current position
             return
@@ -216,8 +266,9 @@ def get_user_input():
     print('  1 - Circular movement')
     print('  2 - Figure-8 movement')
     print('  3 - Random movement')
+    print('  4 - Keyboard control (WASD+RF)')
     print()
-    print('Press 1, 2, or 3 (or any other key for default circular):')
+    print('Press 1, 2, 3, or 4 (or any other key for default circular):')
 
     # Get pattern selection with timeout
     pattern_input = input().strip()
@@ -225,7 +276,8 @@ def get_user_input():
     pattern_map = {
         '1': 'circle',
         '2': 'figure8',
-        '3': 'random'
+        '3': 'random',
+        '4': 'keyboard'
     }
 
     pattern = pattern_map.get(pattern_input, 'circle')
@@ -234,6 +286,19 @@ def get_user_input():
         print(f'Invalid selection "{pattern_input}". Using default: circular movement')
     else:
         print(f'Selected: {pattern} movement')
+
+    # Display keyboard controls if keyboard mode is selected
+    if pattern == 'keyboard':
+        print()
+        print('Keyboard Controls:')
+        print('  W - Move Forward (Y+)')
+        print('  S - Move Backward (Y-)')
+        print('  A - Move Left (X-)')
+        print('  D - Move Right (X+)')
+        print('  R - Move Up (Z-)')
+        print('  F - Move Down (Z+)')
+        print('  Q - Land and quit')
+        print()
 
     print()
     print('Enter duration in seconds (or press ENTER for infinite):')
@@ -285,6 +350,9 @@ def main(args=None) -> None:
     except KeyboardInterrupt:
         enemy_offboard_control.get_logger().info('Interrupted by user')
     finally:
+        # Restore terminal settings if they were changed
+        if enemy_offboard_control.old_settings is not None:
+            termios.tcsetattr(sys.stdin, termios.TCSADRAIN, enemy_offboard_control.old_settings)
         enemy_offboard_control.destroy_node()
         rclpy.shutdown()
 

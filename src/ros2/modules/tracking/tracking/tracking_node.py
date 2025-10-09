@@ -93,7 +93,7 @@ class TrackingNode(Node):
             return
 
         # Log detection values for debugging
-        self.get_logger().info(f'Detection received: x={msg.x}, y={msg.y}, width={msg.width}, height={msg.height}')
+        self.get_logger().debug(f'Detection received: x={msg.x}, y={msg.y}, width={msg.width}, height={msg.height}')
 
         # Validate detection data
         if msg.width <= 0 or msg.height <= 0:
@@ -113,7 +113,7 @@ class TrackingNode(Node):
         )
 
         if not enemy_world_pose:
-            self.get_logger().error('Coordinate transformation failed, skipping publishing')
+            self.get_logger().debug('Coordinate transformation failed, skipping publishing')
             return
 
         # Create and publish PoseStamped message

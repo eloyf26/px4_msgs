@@ -72,28 +72,37 @@ class DetectionAlgorithm:
         self.nms_threshold = self.model_config['nms_threshold']
         self.target_classes = self.model_config['target_classes']
 
-        # Tracking parameters
-        self.max_distance_threshold = self.config['tracking']['max_distance_threshold']
+        # Smoothing parameters
+        self.smoothing_enabled = self.config['smoothing']['enabled']
+        self.smoothing_alpha = self.config['smoothing']['alpha']
+        self.smoothed_box = None  # [x1, y1, x2, y2]
 
-        # Tracking state for consistent target selection
-        self.last_detection_box = None
-
-    @staticmethod
-    def _box_center_distance(box1, box2) -> float:
-        """Calculate Euclidean distance between centers of two bounding boxes."""
-        x1_1, y1_1, x2_1, y2_1 = box1.xyxy[0].tolist()
-        x1_2, y1_2, x2_2, y2_2 = box2.xyxy[0].tolist()
-
-        center1_x = (x1_1 + x2_1) / 2
-        center1_y = (y1_1 + y2_1) / 2
-        center2_x = (x1_2 + x2_2) / 2
-        center2_y = (y1_2 + y2_2) / 2
-
-        return np.sqrt((center1_x - center2_x)**2 + (center1_y - center2_y)**2)
-
-    def detect(self, image: np.ndarray, debug: bool = False) -> tuple[DetectionResult, np.ndarray | None]:
+    def _smooth_bbox(self, bbox_xyxy: np.ndarray) -> np.ndarray:
         """
-        Detect objects in the image using YOLOv11n.
+        Apply exponential moving average to bounding box coordinates.
+
+        Args:
+            bbox_xyxy: [x1, y1, x2, y2]
+
+        Returns:
+            Smoothed [x1, y1, x2, y2]
+        """
+        if not self.smoothing_enabled:
+            return bbox_xyxy
+
+        if self.smoothed_box is None:
+            self.smoothed_box = bbox_xyxy
+            return bbox_xyxy
+
+        # EMA: smoothed = alpha * new + (1 - alpha) * old
+        self.smoothed_box = (self.smoothing_alpha * bbox_xyxy +
+                            (1 - self.smoothing_alpha) * self.smoothed_box)
+
+        return self.smoothed_box
+
+    def track(self, image: np.ndarray, debug: bool = False) -> tuple[DetectionResult, np.ndarray | None]:
+        """
+        Track objects using YOLO's BoT-SORT tracker.
 
         Args:
             image: Input image as numpy array (OpenCV format, BGR)
@@ -102,8 +111,14 @@ class DetectionAlgorithm:
         Returns:
             Tuple of (DetectionResult, annotated_image or None)
         """
-        # Run YOLO detection
-        results = self.model(image, conf=self.confidence_threshold, verbose=False)
+        # Run YOLO tracking (uses BoT-SORT by default)
+        results = self.model.track(
+            image,
+            conf=self.confidence_threshold,
+            persist=True,  # Persist tracker state between frames
+            verbose=False,
+            tracker='botsort.yaml'  # Explicit tracker config
+        )[0]
 
         # Create annotated image copy only if debug mode enabled
         annotated_image = image.copy() if debug else None
@@ -111,131 +126,71 @@ class DetectionAlgorithm:
         # Default result (no detection)
         detection_result = DetectionResult(0, 0, 0, 0)
 
-        if len(results[0].boxes) <= 0:
+        if results.boxes is None or len(results.boxes) == 0:
             return detection_result, annotated_image
 
-        boxes = results[0].boxes
+        boxes = results.boxes
 
-        # Filter boxes by target classes (e.g., drones only)
-        drone_boxes = []
-        for i, box in enumerate(boxes):
+        # Filter by target classes
+        tracked_drones = []
+        for box in boxes:
             if self.target_classes is not None:
                 class_id = int(box.cls[0].item())
                 if class_id not in self.target_classes:
                     continue
-            drone_boxes.append((i, box))
 
-        # Select best detection: prefer closest to previous detection for tracking consistency
-        best_idx = -1
+            # BoT-SORT provides tracking IDs
+            track_id = box.id[0].item() if box.id is not None else -1
+            tracked_drones.append((box, track_id))
 
-        if self.last_detection_box is not None and drone_boxes:
-            # Prefer drone closest to last detection (temporal consistency)
-            min_distance = float('inf')
-            closest_idx = -1
-            for i, box in drone_boxes:
-                distance = self._box_center_distance(box, self.last_detection_box)
-                if distance < min_distance:
-                    min_distance = distance
-                    closest_idx = i
+        if not tracked_drones:
+            return detection_result, annotated_image
 
-            # Only use closest if within threshold, otherwise reset to highest confidence
-            if min_distance <= self.max_distance_threshold:
-                best_idx = closest_idx
-            else:
-                # Target moved too far or is a different drone - reset tracking
-                self.last_detection_box = None
-                best_conf = 0
-                for i, box in drone_boxes:
-                    conf = box.conf[0].item()
-                    if conf > best_conf:
-                        best_conf = conf
-                        best_idx = i
-        elif drone_boxes:
-            # No previous detection: use highest confidence
-            best_conf = 0
-            for i, box in drone_boxes:
-                conf = box.conf[0].item()
-                if conf > best_conf:
-                    best_conf = conf
-                    best_idx = i
+        # Select primary target: highest confidence drone
+        best_box = max(tracked_drones, key=lambda x: x[0].conf[0].item())[0]
 
-        # Draw all detections (only in debug mode)
-        if debug and annotated_image is not None:
-            for i, box in drone_boxes:
-                x1, y1, x2, y2 = box.xyxy[0].tolist()
-                conf = box.conf[0].item()
-                class_id = int(box.cls[0].item())
+        # Extract and smooth bounding box
+        x1, y1, x2, y2 = best_box.xyxy[0].cpu().numpy()
+        smoothed_bbox = self._smooth_bbox(np.array([x1, y1, x2, y2]))
+        x1, y1, x2, y2 = smoothed_bbox
 
-                # Get class name
-                if self.target_classes == [0]:  # Drone-specific model
-                    class_name = 'drone'
-                else:
-                    class_name = self.model.names[class_id]
+        detection_result = DetectionResult(
+            x=int(x1),
+            y=int(y1),
+            width=int(x2 - x1),
+            height=int(y2 - y1)
+        )
 
-                # Get visualization settings
-                viz = self.config['visualization']
-
-                # Color and thickness based on whether it's primary detection
-                if i == best_idx:
-                    color = tuple(viz['colors']['primary'])
-                    thickness = viz['thickness']['primary']
-                else:
-                    color = tuple(viz['colors']['secondary'])
-                    thickness = viz['thickness']['secondary']
-
-                # Draw bounding box
-                cv2.rectangle(annotated_image,
-                            (int(x1), int(y1)),
-                            (int(x2), int(y2)),
-                            color, thickness)
-
-                # Draw label
-                label = f'{class_name}: {conf:.2f}'
-                font_type = viz['font']['type']
-                font_scale = viz['font']['scale']
-                text_thickness = viz['thickness']['text']
-
-                label_size, _ = cv2.getTextSize(label, font_type, font_scale, text_thickness)
-
-                # Label background
-                cv2.rectangle(annotated_image,
-                            (int(x1), int(y1) - label_size[1] - 4),
-                            (int(x1) + label_size[0], int(y1)),
-                            color, -1)
-
-                # Label text
-                cv2.putText(annotated_image, label,
-                        (int(x1), int(y1) - 2),
-                        font_type,
-                        font_scale,
-                        tuple(viz['colors']['text']),
-                        text_thickness)
-
-        # Use best detection for result
-        if best_idx >= 0:
-            best_box = boxes[best_idx]
-            x1, y1, x2, y2 = best_box.xyxy[0].tolist()
-
-            detection_result = DetectionResult(
-                x=int(x1),
-                y=int(y1),
-                width=int(x2 - x1),
-                height=int(y2 - y1)
-            )
-
-            # Store for next frame's tracking consistency
-            self.last_detection_box = best_box
-        else:
-            # No valid detection - clear tracking state
-            self.last_detection_box = None
-
-        # Add info overlay (only in debug mode)
+        # Debug visualization
         if debug and annotated_image is not None:
             viz = self.config['visualization']
-            model_info = self.model_config['name'].replace('.pt', '')
-            num_detections = len(drone_boxes)
-            info_text = f"Model: {model_info} | Detections: {num_detections}"
 
+            for box, track_id in tracked_drones:
+                bx1, by1, bx2, by2 = box.xyxy[0].tolist()
+                conf = box.conf[0].item()
+
+                is_primary = (box == best_box)
+                color = tuple(viz['colors']['primary' if is_primary else 'secondary'])
+                thickness = viz['thickness']['primary' if is_primary else 'secondary']
+
+                # Draw box
+                cv2.rectangle(annotated_image,
+                            (int(bx1), int(by1)),
+                            (int(bx2), int(by2)),
+                            color, thickness)
+
+                # Label with track ID
+                label = f'ID:{int(track_id)} {conf:.2f}' if track_id >= 0 else f'drone {conf:.2f}'
+                cv2.putText(annotated_image, label,
+                           (int(bx1), int(by1) - 5),
+                           viz['font']['type'],
+                           viz['font']['scale'],
+                           color,
+                           viz['thickness']['text'])
+
+            # Info overlay
+            model_info = self.model_config['name'].replace('.pt', '')
+            info_text = f"Model: {model_info} | Tracked: {len(tracked_drones)}"
             cv2.putText(annotated_image, info_text,
                        (10, 30),
                        viz['font']['type'],

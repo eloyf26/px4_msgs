@@ -1,7 +1,7 @@
 # Halcon1 Detection Configuration
 
 # Selected model (options: yolo11n_base, yolo11n_drone, yolo11n_fast)
-selected_model: 'long_range'
+selected_model: 'short_mid_range'
 
 # Model configurations
 models:
@@ -9,16 +9,22 @@ models:
     name: 'yolo11n.pt'
     confidence_threshold: 0.5
     nms_threshold: 0.45
-    target_classes: null  # null = all classes
+    target_classes: [4, 14, 37]  # airplane, bird, kite (drones sometimes classified as kite)
   long_range:
     name: 'yolo11n-extended-200epochs.pt'
     confidence_threshold: 0.5
     nms_threshold: 0.45
     target_classes: [0]  # List of class IDs (0 = drone)
+  short_mid_range:
+    name: 'yolo11n-uavs-finetune-mid-short.pt'
+    confidence_threshold: 0.5
+    nms_threshold: 0.45
+    target_classes: [0]  # List of class IDs (0 = drone)
 
-# Tracking consistency
-tracking:
-  max_distance_threshold: 200  # Max pixel distance to consider same target
+# Smoothing parameters
+smoothing:
+  enabled: true
+  alpha: 0.7  # EMA factor: higher = more responsive, lower = smoother (range: 0.0-1.0)
 
 # Visualization settings (debug mode)
 visualization:

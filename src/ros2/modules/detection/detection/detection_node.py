@@ -72,9 +72,9 @@ class DetectionNode(Node):
             self.get_logger().error(f'Failed to convert image: {e}')
             return
 
-        # Run detection algorithm on the image
+        # Run tracking algorithm on the image
         # Returns both detection result and annotated image (if debug mode enabled)
-        detection_result, annotated_image = self.algorithm.detect(cv_image, debug=self.debug_mode)
+        detection_result, annotated_image = self.algorithm.track(cv_image, debug=self.debug_mode)
 
         # Check if we have a valid detection
         if detection_result.width > 0 and detection_result.height > 0:
