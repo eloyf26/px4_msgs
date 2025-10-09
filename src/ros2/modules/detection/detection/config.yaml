@@ -1,6 +1,9 @@
 # Halcon1 Detection Configuration
 
-# Selected model (options: yolo11n_base, yolo11n_drone, yolo11n_fast)
+# Model operation mode: 'single' or 'dual'
+model_mode: 'dual'  # Set to 'dual' to enable dual model inference
+
+# Selected model (used when model_mode is 'single')
 selected_model: 'short_mid_range'
 
 # Model configurations
@@ -21,10 +24,40 @@ models:
     nms_threshold: 0.45
     target_classes: [0]  # List of class IDs (0 = drone)
 
+# Dual model configuration (used when model_mode is 'dual')
+dual_models:
+  short_range:
+    model_ref: 'short_mid_range'  # Reference to models section above
+    priority: 1  # Lower = higher priority when both models detect (1 = highest)
+  long_range:
+    model_ref: 'long_range'  # Reference to models section above
+    priority: 2
+
+  # Range-based switching strategy
+  switching:
+    # Strategy: Adaptive switching based on bbox area
+    # Runs one model at a time based on detection size for efficiency
+    # Both models run only in overlap/transition zone for smooth switching
+    strategy: 'bbox_size'
+
+    # Bbox area thresholds (in pixels²) - tuned for 1920x1080 resolution with 80° FOV
+    # Note: Same object appears ~2.1x larger than in old 1280x960@100° FOV config
+    bbox_threshold: 8000   # Detections smaller than this use long-range model
+    overlap_zone: 1000      # Transition zone where both models may be used (bbox_threshold < measurement < bbox_threshold + overlap_zone)
+
+    # Fusion method when both models detect (used by both strategies):
+    # - 'highest_conf': Pick detection with highest confidence
+    # - 'confidence_weighted': Blend bbox coordinates weighted by confidence
+    # - 'nms': Apply Non-Maximum Suppression across both outputs
+    fusion_method: 'highest_conf'
+
+    # Confidence boost for preferred model in overlap zone (0.0 - 0.2 recommended)
+    priority_boost: 0.1  # Add this to confidence of higher priority model
+
 # Smoothing parameters
 smoothing:
   enabled: true
-  alpha: 0.7  # EMA factor: higher = more responsive, lower = smoother (range: 0.0-1.0)
+  alpha: 0.2  # EMA factor: higher = more responsive, lower = smoother (range: 0.0-1.0)
 
 # Visualization settings (debug mode)
 visualization:

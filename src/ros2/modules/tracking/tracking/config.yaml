@@ -1,17 +1,18 @@
 # Tracking Configuration
 
 # Camera intrinsics calculation:
-# From SDF: Resolution = 1280x960, H_FOV = 1.74 rad
+# From SDF: Resolution = 1920x1080, H_FOV = 1.39 rad (79.67°)
+# Matches Sony IMX519 camera: 80° FOV, 1080p mode
 # fx = (image_width / 2) / tan(H_FOV / 2)
-# fx = (1280 / 2) / tan(1.74 / 2) = 640 / tan(0.87) = 640 / 0.975 = 656.5
+# fx = (1920 / 2) / tan(1.39 / 2) = 960 / tan(0.695) = 960 / 0.848 = 1132.1
 # fy = fx (square pixels assumption)
-# cx = image_width / 2 = 1280 / 2 = 640
-# cy = image_height / 2 = 960 / 2 = 480
+# cx = image_width / 2 = 1920 / 2 = 960
+# cy = image_height / 2 = 1080 / 2 = 540
 camera_intrinsics:
-  fx: 656.5
-  fy: 656.5
-  cx: 640.0
-  cy: 480.0
+  fx: 1132.1
+  fy: 1132.1
+  cx: 960.0
+  cy: 540.0
 
 camera_mount:
   x: 0.22
