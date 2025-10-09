@@ -131,10 +131,6 @@ external/*/build/
 external/*/install/
 external/*/log/
 
-# Gazebo artifacts
-*.world~
-models/
-
 # Specific large files that shouldn't be tracked
 *.tar.gz
 *.zip

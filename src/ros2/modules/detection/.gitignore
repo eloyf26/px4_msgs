@@ -5,6 +5,3 @@ __pycache__/
 
 # Cache files
 *.cache
-
-# Keep only final models in models/
-# The training scripts are in training/ folder

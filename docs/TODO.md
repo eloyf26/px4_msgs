@@ -27,8 +27,8 @@ Generic Improvmenets
     - [ ] Directional acceleration aim at future drone position (not current)
     - [ ] Fine-tune ProNav parameters
 - [ ] Detection
-  - [ ] Choose best candidate box taking into account previous box position (not just most confidence)
-  - [ ] _(Only if required)_ Fine tune the model
+  - [x] Choose best candidate box taking into account previous box position (not just most confidence)
+  - [x] _(Only if required)_ Fine tune the model
   - [ ] _(Only if required)_ Improve depth estimation algorithm
 
 ### MILESTONE 3 (18th October): Hardware in the loop (HITL) simulation with PX4 SITL and Gazebo
