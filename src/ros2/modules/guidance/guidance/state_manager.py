@@ -49,7 +49,7 @@ class StateManager:
 
         # If any of them are None, we cannot compute acceleration
         if friendly_estimated_position is None or friendly_estimated_velocity is None or enemy_estimated_position is None or enemy_estimated_velocity is None:
-            return None
+            return None, None
 
         # Apply offset to enemy position
         enemy_estimated_position[2] += self.offset
@@ -57,7 +57,8 @@ class StateManager:
         # Check if we are already within interception range
         distance_to_enemy = np.linalg.norm(friendly_estimated_position - enemy_estimated_position)
         if distance_to_enemy < self.interception_range:
-            return np.zeros(3) # TODO: We want to actually display something here right?
+            # TODO: Interception logic (e.g. return to home)
+            return np.zeros(3), enemy_estimated_position
 
         # Now use ProNav to compute required acceleration
         required_acceleration = self.pro_nav.compute_acceleration(
@@ -67,7 +68,7 @@ class StateManager:
             enemy_velocity=enemy_estimated_velocity
         )
 
-        return required_acceleration
+        return required_acceleration, enemy_estimated_position
 
     def _predict_friendly_state(self, current_time_millis: int):
         if self.friendly_position is None or self.friendly_velocity is None or self.friendly_last_update is None:

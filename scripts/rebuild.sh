@@ -219,6 +219,13 @@ echo -e "${GREEN}╔════════════════════
 echo -e "${GREEN}║              Rebuild Complete!                         ║${NC}"
 echo -e "${GREEN}╚════════════════════════════════════════════════════════╝${NC}"
 echo ""
-echo -e "${BLUE}Source the workspace in new terminals:${NC}"
-echo -e "  source install/setup.bash"
+
+# Source the workspace automatically for the current shell
+echo -e "${BLUE}→ Sourcing workspace for current terminal...${NC}"
+source install/setup.bash
+echo -e "${GREEN}✓ Workspace sourced${NC}"
+echo ""
+
+echo -e "${YELLOW}Note: Open terminals need to source manually:${NC}"
+echo -e "  ${BLUE}source install/setup.bash${NC}"
 echo ""

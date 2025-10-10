@@ -49,8 +49,8 @@ class TrackingNode(Node):
 
         # Enemy drone dimensions for depth estimation
         # TODO: Should be ros2 parameters
-        self.enemy_drone_width = 0.5
-        self.enemy_drone_height = 0.2
+        self.enemy_drone_width = 0.787
+        self.enemy_drone_height = 0.491
 
         # State
         self.friendly_pose = None
@@ -69,7 +69,10 @@ class TrackingNode(Node):
         q_px4_xyzw = [q_px4_wxyz[1], q_px4_wxyz[2], q_px4_wxyz[3], q_px4_wxyz[0]]
 
         # Transform orientation from PX4 (FRD-to-NED) to ROS2 (FLU-to-ENU)
-        self.friendly_orientation = CoordinateTransform.px4_to_ros_orientation(q_px4_xyzw)
+        self.friendly_orientation = CoordinateTransform.px4_to_ros_orientation(
+            q_px4_xyzw,
+            yaw_correction_degrees=6.0  # Empirical correction
+        )
 
     def camera_info_callback(self, msg):
         """Update the camera intrinsic parameters from CameraInfo message"""

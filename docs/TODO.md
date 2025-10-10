@@ -19,17 +19,26 @@ Current state: Modules tested individually in the simulation environment success
 
 ### MILESTONE 2 (9th October): Success in the simulation
 
-Generic Improvmenets
-- [ ] Guidance
+
+Generic Improvements
+- [x] Guidance
   - [x] Add process noise to Kalman Filter
-  - [ ] Proportional navigation
+  - [x] Proportional navigation
     - [x] Agile drone movement (feels clunky right now)
-    - [ ] Directional acceleration aim at future drone position (not current)
-    - [ ] Fine-tune ProNav parameters
+    - [x] Directional acceleration aim at future drone position (not current)
+    - [x] Fine-tune ProNav parameters
+  - [ ] Kalman Filter prediction improvements
+    - [x] Debug predictions by publishing to ROS2
+    - [x] Finetune prediction for simple trajectories.
+    - [x] Prioritize smooth trajectory output (current output is very jerky)
+    - [ ] Use KF for friendly drone as well (Visual Odometry can be noisy)
+- [x] Position tracker
+  - [x] Make it work at least when both drones are static
+  - [x] Better depth estimation
 - [ ] Detection
-  - [x] Choose best candidate box taking into account previous box position (not just most confidence)
-  - [x] _(Only if required)_ Fine tune the model
-  - [ ] _(Only if required)_ Improve depth estimation algorithm
+  - [x] Choose the best candidate box taking into account previous box position (not just most confidence)
+  - [ ] Fine tune the model
+  - [ ] Long range detection
 
 ### MILESTONE 3 (18th October): Hardware in the loop (HITL) simulation with PX4 SITL and Gazebo
 

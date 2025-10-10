@@ -19,6 +19,10 @@ class GuidanceNode(Node):
         super().__init__('guidance_node')
         self.get_logger().info('Starting guidance node...')
 
+        # Declare and get debug parameter
+        self.declare_parameter('debug', False)
+        self.debug_mode = self.get_parameter('debug').get_parameter_value().bool_value
+
         # Configure QoS profile for PX4
         qos_profile = QoSProfile(
             reliability=ReliabilityPolicy.BEST_EFFORT,
@@ -34,6 +38,12 @@ class GuidanceNode(Node):
             OffboardControlMode, '/fmu/in/offboard_control_mode', qos_profile)
         self.vehicle_command_publisher = self.create_publisher(VehicleCommand, '/fmu/in/vehicle_command', qos_profile)
 
+        # Debug publisher (only created if debug mode is enabled)
+        if self.debug_mode:
+            self.debug_kf_prediction_pub = self.create_publisher(PoseStamped, '/debug/enemy/kf_prediction', 10)
+        else:
+            self.debug_kf_prediction_pub = None
+
         # Subscribers
         self.friendly_sub = self.create_subscription(
             VehicleOdometry, '/fmu/out/vehicle_odometry',
@@ -43,10 +53,9 @@ class GuidanceNode(Node):
             self.enemy_callback, 10)
 
         # Algorithms
-        self.state_manager = StateManager(KalmanFilterParameters(process_noise = 0.1),
-                                          ProportionalNavigationParameters(navigation_constant = 3.0, max_acceleration = 10.0,
-                                                                           max_velocity = 20.0, directional_to_los_change_threshold = 50.0),
-                                                                           interception_range = 0.5, offset_m = 0.0)
+        self.state_manager = StateManager(KalmanFilterParameters(),
+                                          ProportionalNavigationParameters(),
+                                          interception_range = 0.5, offset_m = 0.0)
 
         # Timer for 50 Hz publishing (PX4 requirements)
         self.timer = self.create_timer(0.02, self.publish_command)
@@ -60,6 +69,9 @@ class GuidanceNode(Node):
 
         self.get_logger().info('Guidance node ready. Arm and takeoff manually via QGroundControl.')
         self.get_logger().info('Once airborne, the system will automatically intercept detected enemies.')
+        self.get_logger().info(f"Debug mode: {'ON' if self.debug_mode else 'OFF'}")
+        if self.debug_mode:
+            self.get_logger().info('\tKF prediction will be published to /debug/enemy/kf_prediction topic.')
 
     def friendly_callback(self, msg):
         """Update friendly drone position from PX4"""
@@ -69,11 +81,6 @@ class GuidanceNode(Node):
 
         friendly_position_enu = CoordinateTransform.ned_to_enu_local_frame(msg.position)
         friendly_velocity_enu = CoordinateTransform.ned_to_enu_local_frame(msg.velocity)
-
-        self.get_logger().info(
-            f'Friendly position (ENU): x={friendly_position_enu.x:.3f}, '
-            f'y={friendly_position_enu.y:.3f}, z={friendly_position_enu.z:.3f} m'
-        )
 
         self.state_manager.update_friendly(
             friendly_position=np.array([friendly_position_enu.x, friendly_position_enu.y, friendly_position_enu.z]),
@@ -117,23 +124,26 @@ class GuidanceNode(Node):
 
         # Update state manager (convert nanoseconds to milliseconds for state estimation)
         current_time_millis = self.get_clock().now().nanoseconds / 1e6
-        current_acceleration = self.state_manager.update(current_time_millis)
+        current_acceleration, enemy_predicted_position = self.state_manager.update(current_time_millis)
+
+        if self.debug_mode and enemy_predicted_position is not None and self.debug_kf_prediction_pub is not None:
+            # Publish KF predicted enemy position for debugging
+            kf_prediction_msg = PoseStamped()
+            kf_prediction_msg.header.stamp = self.get_clock().now().to_msg()
+            kf_prediction_msg.header.frame_id = 'world'
+            kf_prediction_msg.pose.position.x = enemy_predicted_position[0]
+            kf_prediction_msg.pose.position.y = enemy_predicted_position[1]
+            kf_prediction_msg.pose.position.z = enemy_predicted_position[2]
+            self.debug_kf_prediction_pub.publish(kf_prediction_msg)
 
         # Log acceleration for debugging
-        if current_acceleration is not None:
-            self.get_logger().info(
-                f'Acceleration command (ENU): x={current_acceleration[0]:.3f}, '
-                f'y={current_acceleration[1]:.3f}, z={current_acceleration[2]:.3f} m/s²'
-            )
+        if current_acceleration is None:
+            self.get_logger().info('No valid acceleration command computed')
+            return
 
         # Convert acceleration from ENU (state_manager) to NED (PX4)
         acceleration_enu = DronePose(x=current_acceleration[0], y=current_acceleration[1], z=current_acceleration[2])
         acceleration_ned = CoordinateTransform.enu_to_ned_local_frame(acceleration_enu)
-
-        self.get_logger().info(
-            f'Acceleration command (NED): x={acceleration_ned[0]:.3f}, '
-            f'y={acceleration_ned[1]:.3f}, z={acceleration_ned[2]:.3f} m/s²'
-        )
 
         # Generate offboard commands and trajectory setpoint (convert back to microseconds for PX4)
         current_time_micros = int(self.get_clock().now().nanoseconds / 1000)

@@ -139,7 +139,7 @@ class AllyVisualizer(Node):
                 q_px4_wxyz = list(msg.q)
                 q_px4_xyzw = [q_px4_wxyz[1], q_px4_wxyz[2], q_px4_wxyz[3], q_px4_wxyz[0]]
 
-                enu_quat = CoordinateTransform.px4_to_ros_orientation(q_px4_xyzw)
+                enu_quat = CoordinateTransform.px4_to_ros_orientation(q_px4_xyzw, yaw_correction_degrees=-6.0)
                 odom.pose.pose.orientation.x = float(enu_quat[0])
                 odom.pose.pose.orientation.y = float(enu_quat[1])
                 odom.pose.pose.orientation.z = float(enu_quat[2])

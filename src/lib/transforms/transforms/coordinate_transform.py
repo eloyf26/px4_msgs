@@ -4,6 +4,10 @@ Frame conversion utilities for PX4 ↔ ROS2 coordinate transformations.
 Implementation matches PX4's official px4_ros_com/frame_transforms library:
 https://github.com/PX4/px4_ros_com/blob/main/include/px4_ros_com/frame_transforms.h
 """
+from typing import Optional
+
+import numpy as np
+from scipy.spatial.transform import Rotation as R
 
 from common_types import DronePose
 
@@ -46,7 +50,7 @@ class CoordinateTransform:
         ]
 
     @staticmethod
-    def px4_to_ros_orientation(q_px4: list[float]) -> list[float]:
+    def px4_to_ros_orientation(q_px4: list[float], yaw_correction_degrees: float = 0.0) -> list[float]:
         """
         Transform orientation from PX4 (FRD-to-NED) to ROS2 (FLU-to-ENU).
 
@@ -55,19 +59,24 @@ class CoordinateTransform:
 
         Args:
             q_px4: Quaternion [x, y, z, w] representing FRD-to-NED rotation
+            yaw_correction_deg: Optional yaw correction in degrees to apply after transformation
 
         Returns:
             Quaternion [x, y, z, w] representing FLU-to-ENU rotation
-        """
-        import numpy as np
-        from scipy.spatial.transform import Rotation as R
 
+        Notes: PX4 odometry reports incorrect quaternion [0.67, 0, 0, 0.74] (w, x, y, z) when drone is at yaw=0.
+        This represents a ~96° yaw instead of expected 90°. A systematic ~6° yaw error.
+        """
         # Static quaternions from PX4's frame_transforms.h
         NED_ENU_Q = R.from_euler('xyz', [np.pi, 0.0, np.pi/2])
         AIRCRAFT_BASELINK_Q = R.from_euler('xyz', [np.pi, 0.0, 0.0])
 
         r_px4 = R.from_quat(q_px4)
         r_ros = NED_ENU_Q * r_px4 * AIRCRAFT_BASELINK_Q
+
+        # Apply optional yaw correction
+        yaw_correction_q = R.from_euler('z', yaw_correction_degrees, degrees=True)
+        r_ros = yaw_correction_q * r_ros
 
         return r_ros.as_quat().tolist()
 
@@ -85,9 +94,6 @@ class CoordinateTransform:
         Returns:
             Quaternion [x, y, z, w] representing FRD-to-NED rotation
         """
-        import numpy as np
-        from scipy.spatial.transform import Rotation as R
-
         # Static quaternions (self-inverse for 180° rotations)
         NED_ENU_Q = R.from_euler('xyz', [np.pi, 0.0, np.pi/2])
         AIRCRAFT_BASELINK_Q = R.from_euler('xyz', [np.pi, 0.0, 0.0])

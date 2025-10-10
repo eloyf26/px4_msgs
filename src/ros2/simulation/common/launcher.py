@@ -585,11 +585,12 @@ Available simulators:
 
         # Launch RViz2 (always - standard visualization tool)
         print("[Launcher] Launching RViz2...")
+        path_to_rviz_config = str(Path(__file__).parent / "rviz_config.rviz") # Same directory where this file is located
         rviz_cmd = [
             "bash", "-c",
             f"source /opt/ros/humble/setup.bash && "
             f"source {ws_setup} && "
-            f"rviz2"
+            f"ros2 run rviz2 rviz2 -d {path_to_rviz_config}"
         ]
 
         rviz_proc = self._launch_in_terminal(

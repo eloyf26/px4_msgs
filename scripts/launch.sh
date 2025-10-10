@@ -64,10 +64,20 @@ chmod +x "$LAUNCHER" 2>/dev/null || true
 echo -e "${GREEN}✓ Pre-flight checks passed${NC}"
 echo ""
 
+# Cleanup function to run cleanup.sh when script exits
+cleanup() {
+    echo ""
+    "$SCRIPT_DIR/cleanup.sh"
+}
+
+# Register cleanup to run on script exit (terminal close, Ctrl+C, etc.)
+trap cleanup EXIT INT TERM
+
 # Source ROS2 and workspace so Python launcher can use ros2 commands
 source /opt/ros/humble/setup.bash
 source "$WS_SETUP"
 
 # Run the Python launcher with all arguments
 # The launcher inherits the sourced ROS2 environment
-exec python3 "$LAUNCHER" "$@"
+# Use regular call instead of exec so trap cleanup works
+python3 "$LAUNCHER" "$@"

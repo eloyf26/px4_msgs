@@ -325,21 +325,21 @@ sudo apt install -y ros-humble-rqt-image-view ros-humble-cv-bridge
 echo "→ Installing Python dependencies..."
 pip3 install --upgrade pip
 
-if [ "$INSTALL_AIRSIM" = true ]; then
-    echo "  Installing all dependencies (including AirSim)..."
-    pip3 install -r requirements.txt
-    pip3 install msgpack-rpc-python  # Additional AirSim dependency
-    echo "✓ All Python dependencies installed (including AirSim)"
-else
-    echo "  Installing core dependencies (excluding AirSim)..."
-    # Install everything except airsim
-    pip3 install ultralytics torch torchvision opencv-python opencv-contrib-python
-    pip3 install numpy scipy PyYAML
-    pip3 install pytest pytest-cov flake8
-    pip3 install colcon-common-extensions empy
-    echo "✓ Core Python dependencies installed"
-    echo "↷ Skipping AirSim dependencies (use --airsim to enable)"
+# If the client has an existing numpy installation that is >= 2, uninstall it.
+NUMPY_VERSION=$(python3 -c "import numpy; print(numpy.__version__)" 2>/dev/null || echo "")
+if [ -n "$NUMPY_VERSION" ]; then
+    NUMPY_MAJOR_VERSION=$(echo "$NUMPY_VERSION" | cut -d. -f1)
+    if [ "$NUMPY_MAJOR_VERSION" -ge 2 ]; then
+        echo "⚠️  Detected numpy version $NUMPY_VERSION (>=2.0), which is incompatible"
+        echo "→ Uninstalling numpy $NUMPY_VERSION..."
+        pip3 uninstall -y numpy
+        echo "✓ numpy uninstalled"
+    fi
 fi
+
+echo "  Installing all dependencies (including AirSim)..."
+pip3 install -r requirements.txt
+echo "✓ All Python dependencies installed (including AirSim)"
 
 # 9. Build ROS2 workspace
 echo "→ Installing ROS2 build tools..."

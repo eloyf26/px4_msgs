@@ -51,6 +51,14 @@ def camera_to_world_coordinates(
     z_width = (enemy_drone_width * camera_intrinsics.fx) / drone_detection.width
     z_height = (enemy_drone_height * camera_intrinsics.fy) / drone_detection.height
 
+    # Provide also valid enemy_drone_width and enemy_drone_height if we want depth to be 5 meters
+    enemy_height_if_z_5_m = 5 * drone_detection.height / camera_intrinsics.fy
+    enemy_width_if_z_5_m = 5 * drone_detection.width / camera_intrinsics.fx
+
+    logger.info(f"Current drone dimensions: {enemy_drone_width}, {enemy_drone_height}")
+    logger.info(f"\tCurrent depth: {z_width}, {z_height}")
+    logger.info(f"Target dimensions:  {enemy_width_if_z_5_m}, {enemy_height_if_z_5_m}")
+
     # If estimates differ significantly, log a warning
     if logger and abs(z_width - z_height) / max(z_width, z_height) > 0.5:
         logger.warn(f"Depth estimates from width and height differ significantly: {z_width:.2f} vs {z_height:.2f}")
@@ -81,26 +89,11 @@ def camera_to_world_coordinates(
     # Rotation matrix R transforms body vectors to world: v_world_enu = R @ v_body_flu
     rotation_matrix = quaternion_to_rotation_matrix(friendly_orientation)
     enemy_position_world_relative = rotation_matrix @ enemy_position_body_frame
-
-    # Debug logging
-    if logger:
-        logger.info(f'Camera frame: [{camera_frame_x:.2f}, {camera_frame_y:.2f}, {camera_frame_z:.2f}]')
-        logger.info(f'Body frame: [{enemy_position_body_frame[0]:.2f}, {enemy_position_body_frame[1]:.2f}, {enemy_position_body_frame[2]:.2f}]')
-        logger.info(f'Friendly quaternion (ENU): {friendly_orientation}')
-        logger.info(f'After rotation: [{enemy_position_world_relative[0]:.2f}, {enemy_position_world_relative[1]:.2f}, {enemy_position_world_relative[2]:.2f}]')
-
     rotated_position = enemy_position_world_relative
 
     # Step 5: Add friendly drone's absolute position to get enemy's absolute position
     camera_position = np.array([friendly_pose.x, friendly_pose.y, friendly_pose.z])
-
-    if logger:
-        logger.info(f'After rotation: [{rotated_position[0]:.2f}, {rotated_position[1]:.2f}, {rotated_position[2]:.2f}]')
-
     enemy_position_world = camera_position + rotated_position
-
-    if logger:
-        logger.info(f'Final world position: [{enemy_position_world[0]:.2f}, {enemy_position_world[1]:.2f}, {enemy_position_world[2]:.2f}]')
 
     return DronePose(enemy_position_world[0], enemy_position_world[1], enemy_position_world[2])
 

@@ -25,6 +25,8 @@ pyyaml>=6.0  # Alias for compatibility
 # Simulation
 airsim==1.8.1
 pynput==1.8.1
+# TODO: Define version
+msgpack-rpc-python
 
 # Development & Testing
 pytest==6.2.5

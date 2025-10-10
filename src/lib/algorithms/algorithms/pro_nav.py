@@ -3,12 +3,15 @@ from dataclasses import dataclass
 
 @dataclass
 class ProportionalNavigationParameters:
+    # Vehicle-specifics
+    max_acceleration: float = 12.0  # Maximum allowable acceleration (m/s²)
+    max_velocity: float = 20.0  # Maximum allowable velocity (m/s)
+
+    # Fine-tunable algorithm parameters
     navigation_constant: float = 3.0  # Typical values are between 3 and 5
-    max_acceleration: float = 5.0  # Maximum allowable acceleration (m/s²)
-    max_velocity: float = 10.0  # Maximum allowable velocity (m/s)
-    directional_to_los_change_threshold: float = 50 # Threshold above which to apply mostly directional acceleration
-                                                    # and below which to apply mostly los change acceleration (m)
-    full_direction_acceleration: float = 100 # At threshold + full_directional apply fully the directional acceleration
+    directional_to_los_change_scale: float = 40
+    directional_to_los_change_threshold: float = 20 # Threshold below which to apply mostly los change acceleration
+    max_seconds_look_ahead: float = 5.0  # Max seconds to look ahead for interception prediction
 
 class ProportionalNavigation:
 
@@ -63,18 +66,16 @@ class ProportionalNavigation:
             pronav_acceleration = acceleration_magnitude * perpendicular_direction
 
         # Step 3: Calculate directional acceleration
-        # TODO: This is a simplification, should point in front of the enemy drone, not at the current position of the enemy drone.
-        directional_acceleration = (relative_position / distance) * self.params.max_acceleration
+        interception_direction = self._compute_interception_direction(relative_position, relative_velocity)
+        directional_acceleration = interception_direction * self.params.max_acceleration
 
         # Step 4: Calculate weights based on distance and velocity
         current_speed = np.linalg.norm(friendly_velocity)
         speed_ratio = current_speed / self.params.max_velocity  # 0 when slow, 1 when at max speed
 
         # Distance-based weight: 1 when far (>threshold), 0 when close (<threshold)
-        if distance > self.params.directional_to_los_change_threshold:
-            distance_weight = 1.0
-        else:
-            distance_weight = 0.0
+        distance_weight = (distance - self.params.directional_to_los_change_threshold) / self.params.directional_to_los_change_scale
+        distance_weight = np.clip(distance_weight, 0.0, 1.0)
 
         # Speed-based weight: 1 when slow, 0 when fast
         speed_weight = 1.0 - speed_ratio
@@ -96,3 +97,36 @@ class ProportionalNavigation:
             combined_acceleration = combined_acceleration * (self.params.max_acceleration / acceleration_norm)
 
         return combined_acceleration
+
+    def _compute_interception_direction(self,
+                                        relative_position: np.ndarray,
+                                        relative_velocity: np.ndarray) -> np.ndarray:
+        """
+        Compute a lead direction toward the target based on short-term prediction using relative motion.
+        Args:
+            relative_position: r = target_pos - interceptor_pos  (shape (3,))
+            relative_velocity: v_r = target_vel - interceptor_vel (shape (3,))
+        Returns:
+            unit vector (3,) pointing from interceptor to predicted target position
+            using relative motion extrapolation.
+        """
+
+        # short-term lead time proportional to distance and closing rate
+        r_norm = np.linalg.norm(relative_position)
+        v_rel_norm = np.linalg.norm(relative_velocity)
+
+        # avoid division by zero
+        t_lead = r_norm / max(v_rel_norm, 1e-3)
+
+        # clamp to maximum look-ahead
+        t_lead = min(t_lead, self.params.max_seconds_look_ahead)
+
+        # predicted intercept point relative to interceptor
+        intercept_vector = relative_position + relative_velocity * t_lead
+
+        # fallback if zero vector
+        norm_intercept = np.linalg.norm(intercept_vector)
+        if norm_intercept < 1e-6:
+            return np.zeros(3)
+
+        return intercept_vector / norm_intercept
