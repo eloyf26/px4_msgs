@@ -1,13 +1,20 @@
 [submodule "external/PX4-Autopilot"]
 	path = external/PX4-Autopilot
-	url = https://github.com/PX4/PX4-Autopilot.git
+	url = https://github.com/eloyf26/PX4-Autopilot.git
+	branch = halcon1-stable
 [submodule "external/Micro-XRCE-DDS-Agent"]
 	path = external/Micro-XRCE-DDS-Agent
-	url = https://github.com/eProsima/Micro-XRCE-DDS-Agent.git
+	url = https://github.com/eloyf26/Micro-XRCE-DDS-Agent.git
+	branch = halcon1-stable
 [submodule "src/ros2/simulation/gazebo/bridges/ros_gz"]
 	path = src/ros2/simulation/gazebo/bridges/ros_gz
-	url = https://github.com/gazebosim/ros_gz.git
-	branch = humble
+	url = https://github.com/eloyf26/ros_gz.git
+	branch = halcon1-stable
 [submodule "src/ros2/external/px4_msgs"]
 	path = src/ros2/external/px4_msgs
-	url = https://github.com/PX4/px4_msgs.git
+	url = https://github.com/eloyf26/px4_msgs.git
+	branch = halcon1-stable
+[submodule "src/ros2/external/ros2_v4l2_camera"]
+	path = src/ros2/external/ros2_v4l2_camera
+	url = https://github.com/eloyf26/ros2_v4l2_camera.git
+	branch = halcon1-stable
